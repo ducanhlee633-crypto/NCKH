@@ -1,0 +1,27 @@
+/* Schedule */
+.summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 28px; }
+.summary-chip { position: relative; display: flex; flex-direction: column; justify-content: center; min-height: 91px; padding: 15px 19px; border: 2px solid; border-radius: 29px; }
+.summary-chip span { font-size: 11px; font-weight: 900; letter-spacing: .8px; }
+.summary-chip b { margin-top: 3px; color: var(--ink); font: 800 22px/1.1 'Baloo 2'; }
+.summary-chip i { position: absolute; right: 20px; top: 24px; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; font-style: normal; font-size: 22px; }
+.summary-chip.blue { color: #2865cb; background: #f0f5ff; border-color: #d9e6ff; }.summary-chip.blue i { background: #dbeaff; }
+.summary-chip.gold { color: #966510; background: #fff9ec; border-color: #ffe2a4; }.summary-chip.gold i { background: #ffe2bb; }
+.summary-chip.mint { color: #138064; background: #f1fffa; border-color: #c9f3e4; }.summary-chip.mint i { background: #d4f8eb; }
+.schedule-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(290px, .66fr); gap: 25px; }
+.schedule-main, .schedule-side { display: flex; flex-direction: column; gap: 25px; min-width: 0; }
+.week-toolbar { display: flex; justify-content: center; align-items: center; gap: 18px; margin: 22px 0 19px; color: #44516b; font-size: 14px; }
+.round-button { display: grid; place-items: center; width: 35px; height: 35px; color: #356ac6; background: #eaf1ff; border: 0; border-radius: 50%; font-size: 24px; }
+.week-grid { display: grid; grid-template-columns: 85px repeat(5, 1fr); gap: 9px; align-items: stretch; }
+.week-corner, .day-heading { display: flex; flex-direction: column; justify-content: center; min-height: 61px; color: #6b7890; font-size: 12px; font-weight: 800; text-align: center; }
+.day-heading { padding: 8px 3px; background: #edf3ff; border-radius: 30px; color: #35445e; }.day-heading span { margin-top: 2px; color: #8c98ac; font-size: 11px; }.day-heading.today { color: var(--blue); background: #dce9ff; }
+.time-label { display: flex; flex-direction: column; justify-content: center; padding: 8px; color: #4879d2; background: #f4f7ff; border-radius: 22px; font-size: 12px; }.time-label span { margin-top: 4px; color: #8a95a8; font-size: 11px; }
+.calendar-slot { min-height: 79px; color: #b4bfd0; background: #f4f7fd; border: 0; border-radius: 25px; font-size: 19px; }.calendar-slot:hover { color: var(--blue); background: #edf4ff; }.calendar-slot.slot-today { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--blue); background: #f0f6ff; }.calendar-slot.slot-today span { margin-top: 6px; font-size: 12px; }
+.energy-bars { display: flex; justify-content: space-around; align-items: end; gap: 10px; min-height: 156px; padding: 14px 8px 0; }.energy-day { display: flex; flex-direction: column; align-items: center; justify-content: end; gap: 8px; height: 140px; color: #77839a; font-size: 11px; }.energy-day i { display: block; width: 42px; min-height: 18px; background: #e1eaff; border-radius: 24px; }.energy-day span { font-size: 11px; }.energy-day.active { color: var(--blue); }.energy-day.active i { background: linear-gradient(#9cbfff 0 52%,#2671e6 52%); }
+.schedule-side .empty-state { min-height: 230px; }.goals-card { position: relative; }.goal-count { position: absolute; right: 28px; top: 33px; color: #7b8799; font-size: 20px; }.goal-count small { font-size: 12px; }.goal-row { display: flex; align-items: center; gap: 11px; min-height: 67px; margin-top: 12px; padding: 11px 13px; background: #eff4ff; border-radius: 27px; }.goal-row span { display: grid; place-items: center; width: 23px; height: 23px; color: #7282a0; background: #fff; border-radius: 50%; }.goal-row b { flex: 1; color: #495975; font-size: 12px; }.goal-row em { color: #2674de; font-size: 12px; font-style: normal; font-weight: 900; }
+
+.week-grid { grid-template-columns: 76px repeat(5,minmax(46px,1fr)); overflow-x: auto; }
+.week-toolbar { flex-wrap: wrap; gap: 10px; }
+.goals-card .goal-count { position: static; margin: 14px 0 0; text-align: right; }
+.goal-row b { min-width: 0; }
+.goal-row em { flex-shrink: 0; }
+.energy-card .small-action { white-space: nowrap; }

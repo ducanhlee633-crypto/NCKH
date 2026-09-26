@@ -1,101 +1,81 @@
-import { useState } from 'react'
-import api from './api'
-import './App.css'
+import { useEffect, useState } from 'react'
+import AppShell from './components/AppShell'
+import './styles/app-shell.css'
+import './styles/shared-components.css'
+import './styles/schedule.css'
+import './styles/roadmap.css'
+import './styles/stats.css'
+import './styles/ai-assistant.css'
+import './styles/pomodoro.css'
+import './styles/settings.css'
+import './styles/community.css'
+import './styles/public-pages.css'
+import './styles/responsive.css'
+import { navigationItems, utilityItems } from './data/navigation'
+import DashboardPage from './pages/DashboardPage'
+import SchedulePage from './pages/SchedulePage'
+import AIAssistantPage from './pages/AIAssistantPage'
+import PomodoroPage from './pages/PomodoroPage'
+import RoadmapPage from './pages/RoadmapPage'
+import StatsPage from './pages/StatsPage'
+import FriendsPage from './pages/FriendsPage'
+import SettingsPage from './pages/SettingsPage'
+import HelpPage from './pages/HelpPage'
+import LandingPage from './pages/LandingPage'
+import AuthPage from './pages/AuthPage'
 
-function App() {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [responseTime, setResponseTime] = useState(null)
-
-  const handleFetchData = async () => {
-    setLoading(true)
-    setError(null)
-    const startTime = performance.now()
-    try {
-      const response = await api.get('/')
-      const endTime = performance.now()
-      setData(response.data)
-      setResponseTime(Math.round(endTime - startTime))
-    } catch (err) {
-      console.error(err)
-      setError(
-        err.response?.data?.message ||
-        err.message ||
-        'Không thể kết nối tới backend. Hãy đảm bảo FastAPI đang chạy tại http://localhost:8000'
-      )
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="container">
-      <div className="card">
-        <div className="badge-row">
-          <span className="badge tech-badge">FastAPI + React</span>
-          <span className="badge endpoint-badge">GET /</span>
-        </div>
-
-        <h1 className="title">Kiểm tra kết nối Frontend - Backend</h1>
-        <p className="subtitle">
-          Nhấn nút bên dưới để gửi request tới backend (<code>http://localhost:8000/</code>) và hiển thị dữ liệu phản hồi.
-        </p>
-
-        <div className="action-area">
-          <button
-            type="button"
-            className={`btn-test ${loading ? 'btn-loading' : ''}`}
-            onClick={handleFetchData}
-            disabled={loading}
-          >
-            {loading ? (
-              <span className="spinner-wrapper">
-                <span className="spinner"></span>
-                <span>Đang kết nối...</span>
-              </span>
-            ) : (
-              <span>Lấy dữ liệu từ Backend</span>
-            )}
-          </button>
-        </div>
-
-        {error && (
-          <div className="result-box error-box">
-            <div className="result-header">
-              <span className="status-dot status-error"></span>
-              <strong>Kết nối thất bại</strong>
-            </div>
-            <p className="error-message">{error}</p>
-            <div className="tip-box">
-              <span>Gợi ý: Chạy lệnh sau trong thư mục <code>backend</code>:</span>
-              <pre className="command-preview">uvicorn main:app --reload --port 8000</pre>
-            </div>
-          </div>
-        )}
-
-        {data && !error && (
-          <div className="result-box success-box">
-            <div className="result-header">
-              <div className="status-info">
-                <span className="status-dot status-success"></span>
-                <strong>Kết nối thành công (200 OK)</strong>
-              </div>
-              {responseTime !== null && (
-                <span className="response-time">{responseTime} ms</span>
-              )}
-            </div>
-            <div className="data-preview">
-              <span className="data-label">Dữ liệu nhận được:</span>
-              <pre className="json-display">
-                {JSON.stringify(data, null, 2)}
-              </pre>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
+const pageMap = {
+  dashboard: DashboardPage,
+  schedule: SchedulePage,
+  assistant: AIAssistantPage,
+  pomodoro: PomodoroPage,
+  roadmap: RoadmapPage,
+  stats: StatsPage,
+  friends: FriendsPage,
+  settings: SettingsPage,
+  help: HelpPage,
 }
 
-export default App
+const publicTitles = { landing: 'Học nhẹ nhàng, đúng nhịp', login: 'Đăng nhập', register: 'Tạo tài khoản' }
+
+function initialRoute() {
+  return window.location.hash.slice(1) || 'dashboard'
+}
+
+export default function App() {
+  const [route, setRoute] = useState(initialRoute)
+  const [page, section] = route.split('/')
+
+  useEffect(() => {
+    const handleHashChange = () => setRoute(initialRoute())
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [])
+
+  useEffect(() => {
+    const title = [...navigationItems, ...utilityItems].find((item) => item.path === page)?.label
+    document.title = (title || publicTitles[page] || 'Không tìm thấy trang') + ' · Nhịp Học'
+    if (section) document.getElementById(section)?.scrollIntoView({ block: 'start' })
+    else window.scrollTo({ top: 0, behavior: 'instant' })
+    document.querySelector('main')?.focus({ preventScroll: true })
+  }, [page, section])
+
+  const navigate = (nextPage) => { window.location.hash = nextPage }
+
+  if (page === 'landing') return <LandingPage onNavigate={navigate} />
+  if (page === 'login' || page === 'register') return <AuthPage mode={page} key={page} onNavigate={navigate} />
+
+  const Page = pageMap[page]
+  return (
+    <AppShell currentPage={page} onNavigate={navigate}>
+      {Page ? <Page onNavigate={navigate} /> : (
+        <section className="dashboard-card not-found">
+          <span aria-hidden="true">🧭</span>
+          <h1>Trang này hơi lạc nhịp rồi!</h1>
+          <p>Quay lại không gian học tập để tiếp tục nhé.</p>
+          <a className="primary-button" href="#dashboard">Về tổng quan</a>
+        </section>
+      )}
+    </AppShell>
+  )
+}
