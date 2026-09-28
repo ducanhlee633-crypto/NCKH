@@ -4,16 +4,16 @@
 .page-intro h1, .simple-heading h1, .settings-heading h1 { font-size: clamp(30px, 4vw, 42px); }
 .page-subtitle { margin: 6px 0 0; color: #71809a; font-size: 14px; font-weight: 700; }
 .intro-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
-.segmented-control { display: flex; gap: 4px; padding: 5px; background: #eaf0ff; border-radius: 24px; }
+.segmented-control { display: flex; gap: 4px; padding: 5px; background: hsl(var(--accent-hue, 216) 100.0% 95.9%); border-radius: 24px; }
 .segmented-control button { min-height: 35px; padding: 0 16px; color: #5b6680; background: transparent; border: 0; border-radius: 20px; font-size: 12px; font-weight: 900; }
-.segmented-control button.selected { color: var(--blue); background: #fff; box-shadow: 0 2px 6px #bbcae866; }
+.segmented-control button.selected { color: var(--blue); background: #fff; box-shadow: 0 2px 6px hsl(var(--accent-hue, 216) 49.5% 82.2% / 0.4); }
 .success-button, .ghost-button, .gold-button { min-height: 43px; padding: 0 18px; border-radius: 23px; font-size: 12px; font-weight: 900; }
 .success-button { color: #fff; background: #07875d; border: 0; border-bottom: 4px solid #046445; }
-.ghost-button { color: var(--blue); background: #fff; border: 2px solid #cbdcff; }
-.ghost-button:hover { background: #eef5ff; }
+.ghost-button { color: var(--blue); background: #fff; border: 2px solid hsl(var(--accent-hue, 216) 100.0% 89.8%); }
+.ghost-button:hover { background: hsl(var(--accent-hue, 216) 100.0% 96.7%); }
 .gold-button { color: #704400; background: #ffc32f; border: 0; border-bottom: 4px solid #da9710; }
-.progress-line { height: 11px; padding: 2px; overflow: hidden; background: #e5edfb; border-radius: 20px; }
-.progress-line i { display: block; height: 100%; min-width: 0; background: linear-gradient(90deg,#3c81ed,#84b4ff); border-radius: inherit; }
+.progress-line { height: 11px; padding: 2px; overflow: hidden; background: hsl(var(--accent-hue, 216) 73.3% 94.1%); border-radius: 20px; }
+.progress-line i { display: block; height: 100%; min-width: 0; background: linear-gradient(90deg,hsl(var(--accent-hue, 216) 83.1% 58.2%),hsl(var(--accent-hue, 216) 100.0% 75.9%)); border-radius: inherit; }
 .progress-line.mint i { background: #53d5ad; }
 .progress-line.violet i { background: #b17be9; }
 .progress-line.gold i { background: #ffc749; }

@@ -4,6 +4,7 @@ export const navigationItems = [
   { icon: '♙', label: 'AI của bạn', path: 'assistant', badge: 'Trợ lý' },
   { icon: '◷', label: 'Pomodoro & Focus', path: 'pomodoro' },
   { icon: '⌁', label: 'Lộ trình & Khóa học', path: 'roadmap' },
+  { icon: '🎯', label: 'Mục tiêu của bạn', path: 'goals' },
   { icon: '↗', label: 'Thống kê & Streak', path: 'stats' },
   { icon: '♧', label: 'Bạn bè', path: 'friends' },
 ]

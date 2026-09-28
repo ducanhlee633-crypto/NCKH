@@ -2,15 +2,15 @@
 
 :root {
   font-family: 'Nunito', system-ui, sans-serif;
-  color: #18233a;
-  background: #f3f7ff;
+  color: hsl(var(--accent-hue, 216) 41.5% 16.1%);
+  background: hsl(var(--accent-hue, 216) 100.0% 97.6%);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
 
 * { box-sizing: border-box; }
-html { min-width: 320px; background: #f3f7ff; }
+html { min-width: 320px; background: hsl(var(--accent-hue, 216) 100.0% 97.6%); }
 body { margin: 0; min-width: 320px; }
 button, input { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
@@ -21,9 +21,9 @@ select, textarea { font: inherit; }
 button, input, select, textarea { max-width: 100%; }
 button, a, input, select, textarea, summary { touch-action: manipulation; }
 :focus-visible { outline: 3px solid #ad72ed; outline-offset: 4px; }
-input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #488aec; outline-offset: 2px; }
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid hsl(var(--accent-hue, 216) 81.2% 60.4%); outline-offset: 2px; }
 main:focus { outline: none; }
-::selection { background: #c1e9ff; color: #17498e; }
+::selection { background: hsl(var(--accent-hue, 216) 100.0% 87.8%); color: hsl(var(--accent-hue, 216) 72.1% 32.4%); }
 [id] { scroll-margin-top: 105px; }
-.skip-link { position: fixed; top: -100px; left: 12px; z-index: 100; padding: 12px 18px; background: #fff; border: 2px solid #1460d2; border-radius: 12px; color: #1460d2; }
+.skip-link { position: fixed; top: -100px; left: 12px; z-index: 100; padding: 12px 18px; background: #fff; border: 2px solid hsl(var(--accent-hue, 216) 82.6% 45.1%); border-radius: 12px; color: hsl(var(--accent-hue, 216) 82.6% 45.1%); }
 .skip-link:focus { top: 12px; }

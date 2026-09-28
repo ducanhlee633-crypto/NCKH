@@ -23,6 +23,8 @@ import SettingsPage from './pages/SettingsPage'
 import HelpPage from './pages/HelpPage'
 import LandingPage from './pages/LandingPage'
 import AuthPage from './pages/AuthPage'
+import GoalsPage from './pages/GoalsPage'
+import './styles/goals.css'
 
 const pageMap = {
   dashboard: DashboardPage,
@@ -30,6 +32,8 @@ const pageMap = {
   assistant: AIAssistantPage,
   pomodoro: PomodoroPage,
   roadmap: RoadmapPage,
+  goals: GoalsPage,
+  goal: GoalsPage,
   stats: StatsPage,
   friends: FriendsPage,
   settings: SettingsPage,

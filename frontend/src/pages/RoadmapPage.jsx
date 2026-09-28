@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { addGoal } from '../data/goals'
 import { CardHeader, PageIntro, ProgressBar, SectionCard } from '../components/PageComponents'
 
 const stages = [
@@ -8,6 +10,17 @@ const stages = [
 ]
 
 export default function RoadmapPage({ onNavigate }) {
+  const [error, setError] = useState('')
+  function saveGoal(event) {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    const title = data.get('title').trim()
+    if (!title) { setError('Hãy đặt tên cho mục tiêu của bạn.'); return }
+    try {
+      addGoal({ title, targetScore: data.get('targetScore'), date: data.get('date') })
+      onNavigate('goals')
+    } catch { setError('Chưa lưu được mục tiêu. Hãy kiểm tra quyền lưu dữ liệu của trình duyệt rồi thử lại.') }
+  }
   return (
     <>
       <PageIntro eyebrow="🧭 KẾ HOẠCH CÁ NHÂN HÓA AI" title="Lộ trình học tập 🎯" subtitle="Chọn mục tiêu để Nhịp Học cùng bạn tạo hành trình vừa sức.">
@@ -20,7 +33,7 @@ export default function RoadmapPage({ onNavigate }) {
       </SectionCard>
       <div className="section-heading"><h2>🗺️ Cấu trúc 4 chặng lộ trình</h2><span className="tag mint">Mô hình thích ứng AI</span><small>↻ Tự động phân bổ lại theo tiến độ thực tế</small></div>
       <div className="stage-grid">{stages.map((stage) => <SectionCard className={'stage-card ' + stage.tone} key={stage.title}><div className="stage-top"><span>{stage.label}</span><small>{stage.state}</small></div><div className="stage-icon">{stage.icon}</div><h3>{stage.label}: {stage.title}</h3><ProgressBar value={0} tone={stage.tone} /><p>0% (0/0 mốc)</p></SectionCard>)}</div>
-      <div className="roadmap-bottom-grid"><SectionCard className="long-stage"><span className="tag blue">Chặng 1</span><h3>📖 Chặng 1: Nền tảng</h3><ProgressBar value={0} /><span className="muted-label">0% (0/0 mốc)</span></SectionCard><SectionCard className="goal-builder" id="goal-builder"><CardHeader icon="✦" title="Khởi tạo mục tiêu" tone="violet" /><p>AI Study Planner sẽ giúp bạn chia nhỏ mục tiêu thành từng bước dễ hoàn thành.</p><div className="field-grid goal-fields"><label className="full">Kỳ thi / mục tiêu<input placeholder="Ví dụ: Thi vào lớp 10" /></label><label>Điểm mục tiêu<input type="number" min="0" max="10" step="0.1" placeholder="8.5" /></label><label>Ngày dự kiến<input type="date" /></label></div><button className="primary-button">🤖 Thiết lập lộ trình ✦</button></SectionCard></div>
+      <div className="roadmap-bottom-grid"><SectionCard className="long-stage"><span className="tag blue">Chặng 1</span><h3>📖 Chặng 1: Nền tảng</h3><ProgressBar value={0} /><span className="muted-label">0% (0/0 mốc)</span></SectionCard><SectionCard className="goal-builder" id="goal-builder"><CardHeader icon="✦" title="Khởi tạo mục tiêu" tone="violet" /><p>AI Study Planner sẽ giúp bạn chia nhỏ mục tiêu thành từng bước dễ hoàn thành.</p><form onSubmit={saveGoal}><div className="field-grid goal-fields"><label className="full">Kỳ thi / mục tiêu<input name="title" required maxLength={160} placeholder="Ví dụ: Thi vào lớp 10" /></label><label>Điểm mục tiêu<input name="targetScore" type="number" min="0" max="10" step="0.1" placeholder="8.5" /></label><label>Ngày dự kiến<input name="date" type="date" required /></label></div><button className="primary-button" type="submit">Lưu mục tiêu ✦</button>{error && <p role="alert">{error}</p>}</form></SectionCard></div>
     </>
   )
 }

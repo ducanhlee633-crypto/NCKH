@@ -34,6 +34,11 @@ export default function Sidebar({ currentPage, onNavigate }) {
         </nav>
       </div>
       <div className="sidebar-bottom">
+        <button className="sidebar-profile" onClick={() => onNavigate('settings')} aria-label="Cài đặt tài khoản Minh Anh">
+          <div className="avatar">MA<span /></div>
+          <div className="sidebar-profile-copy"><b>Minh Anh</b><small>Nhà Thám Hiểm THPT ✦</small></div>
+        </button>
+        <div className="sidebar-xp"><span>✪</span><div><b>0 / 100 XP</b><small>Tiến bộ mỗi ngày</small></div></div>
         {utilityItems.map((item) => <NavLink key={item.path} item={item} active={currentPage === item.path} onNavigate={onNavigate} />)}
       </div>
     </aside>
