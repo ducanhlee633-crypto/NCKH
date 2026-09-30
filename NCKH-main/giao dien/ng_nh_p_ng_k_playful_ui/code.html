@@ -1,0 +1,317 @@
+<!DOCTYPE html><html lang="vi" style=""><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><meta content="web_standard" name="shell-type"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"><link href="https://fonts.googleapis.com" rel="preconnect"><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  body {
+    overscroll-behavior: none;
+  }
+  main > :first-child {
+    margin-top: 0 !important;
+  }
+  main > :last-child {
+    margin-bottom: 0 !important;
+  }
+}
+::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 35s linear infinite;
+}
+
+.marquee-container:hover .animate-marquee {
+  animation-play-state: paused;
+}
+
+@keyframes bounce-gentle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.animate-bounce-gentle {
+  animation: bounce-gentle 2.5s ease-in-out infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 0.4; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 3s ease-in-out infinite;
+}
+</style><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "tertiary": "#784b00",
+          "on-primary-fixed-variant": "#003ea8",
+          "on-primary": "#ffffff",
+          "on-primary-container": "#eeefff",
+          "on-surface": "#111c2d",
+          "outline": "#737686",
+          "error": "#ba1a1a",
+          "on-secondary-container": "#00714d",
+          "on-error": "#ffffff",
+          "inverse-surface": "#263143",
+          "on-primary-fixed": "#00174b",
+          "primary-container": "#2563eb",
+          "tertiary-fixed-dim": "#ffb95f",
+          "surface-container-lowest": "#ffffff",
+          "secondary-container": "#6cf8bb",
+          "tertiary-fixed": "#ffddb8",
+          "surface-container-low": "#f0f3ff",
+          "surface-container-high": "#dee8ff",
+          "on-background": "#111c2d",
+          "on-surface-variant": "#434655",
+          "surface-bright": "#f9f9ff",
+          "background": "#f9f9ff",
+          "surface-container": "#e7eeff",
+          "on-secondary-fixed-variant": "#005236",
+          "error-container": "#ffdad6",
+          "surface-container-highest": "#d8e3fb",
+          "surface": "#f9f9ff",
+          "on-secondary": "#ffffff",
+          "on-error-container": "#93000a",
+          "on-tertiary-fixed": "#2a1700",
+          "primary-fixed-dim": "#b4c5ff",
+          "primary": "#004ac6",
+          "surface-dim": "#cfdaf2",
+          "surface-tint": "#0053db",
+          "outline-variant": "#c3c6d7",
+          "secondary": "#006c49",
+          "on-secondary-fixed": "#002113",
+          "secondary-fixed-dim": "#4edea3",
+          "inverse-primary": "#b4c5ff",
+          "on-tertiary-fixed-variant": "#653e00",
+          "tertiary-container": "#996100",
+          "on-tertiary-container": "#ffeedd",
+          "primary-fixed": "#dbe1ff",
+          "secondary-fixed": "#6ffbbe",
+          "on-tertiary": "#ffffff",
+          "inverse-on-surface": "#ecf1ff",
+          "surface-variant": "#d8e3fb"
+        },
+        "borderRadius": {
+          "DEFAULT": "1rem",
+          "lg": "1.5rem",
+          "xl": "2rem",
+          "2xl": "2.25rem",
+          "3xl": "2.75rem",
+          "full": "9999px"
+        },
+        "spacing": {
+          "gutter-desktop": "2rem",
+          "space-xs": "0.375rem",
+          "gutter": "1.25rem",
+          "space-xl": "2.5rem",
+          "margin-desktop": "2.5rem",
+          "space-sm": "0.75rem",
+          "space-lg": "1.75rem",
+          "margin": "1rem",
+          "space-md": "1.25rem"
+        },
+        "fontFamily": {
+          "sans": ["Plus Jakarta Sans", "sans-serif"],
+          "display-hero": ["Plus Jakarta Sans"]
+        }
+      }
+    }
+  }
+</script></head><body class="bg-[#f5f8ff] text-on-surface min-h-screen relative selection:bg-secondary-container selection:text-on-secondary-fixed"><header class="fixed top-0 left-0 w-full z-50 bg-white/90 backdrop-blur-xl border-b-2 border-primary/10 shadow-[0_4px_20px_rgba(0,74,198,0.06)]"><div class="h-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4"><div class="flex items-center gap-3 shrink-0"><a class="flex items-center gap-2 group" data-path="trang-chu" href="#"><div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary to-primary-container p-1 shadow-md shadow-primary/20 group-hover:rotate-6 transition-transform flex items-center justify-center text-white"><img alt="Nhịp Học Logo" class="h-8 w-auto object-contain brightness-0 invert" src="https://lh3.googleusercontent.com/aida/AEtjO1WWgooSR89Kgv9EIfUdkH3uX3r9WLU41PHTFne5vIKOT0GtyOwRWSbvyuRaQGZETU4VblxmZYsHYwlGKxJCofAx5AL3Ado2HcFygjwWlTeJm_LyfCnB4A-T2C3Y2l77LT27QDroLxkP1EEb32WMbyVTkLJ1fO9Sjk1xbbEDdr6NpGywmnR36W6vKRVrGhX_WLVRp4qemTRRx4gHGk2IjS9NAMQgq0vF4q0f3_1jN0vUN9vOoTZCANPJWwG_"></div><span class="text-2xl font-black tracking-tight text-primary flex items-center gap-1">Nhịp Học <span class="text-amber-500 text-lg">✨</span></span></a></div><nav class="hidden xl:flex items-center gap-2 bg-surface-container/70 p-1.5 rounded-full border border-primary/10"><a class="text-sm font-extrabold text-on-surface-variant hover:text-primary hover:bg-white px-4 py-2 rounded-full transition-all" data-path="tinh-nang" href="#tinh-nang-nang-suat">🚀 Tính năng</a><a class="text-sm font-extrabold text-on-surface-variant hover:text-primary hover:bg-white px-4 py-2 rounded-full transition-all" data-path="lo-trinh-hoc" href="#lo-trinh">🗺️ Lộ trình</a><a class="text-sm font-extrabold text-on-surface-variant hover:text-primary hover:bg-white px-4 py-2 rounded-full transition-all" data-path="phuong-phap-pomodoro-rhythm" href="#tinh-nang-nang-suat">⏱️ Pomodoro</a><a class="text-sm font-extrabold text-on-surface-variant hover:text-primary hover:bg-white px-4 py-2 rounded-full transition-all" data-path="cong-cu-deadline" href="#tinh-nang-nang-suat">🎯 Quản lý Deadline</a></nav><div class="flex items-center gap-3"><div class="hidden md:flex items-center bg-white px-3 py-1.5 rounded-full border-2 border-outline-variant/60 shadow-inner focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"><span class="material-symbols-outlined text-primary text-[20px]">search</span><input class="bg-transparent border-0 outline-none text-on-surface placeholder:text-outline text-xs font-semibold w-36 lg:w-44 focus:ring-0" placeholder="Tìm kiếm tính năng, tác vụ..." type="text"></div><div class="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-amber-100 border border-amber-300 rounded-full font-black text-amber-800 text-xs shadow-sm"><span class="text-base">🔥</span><span class="">Chuỗi 5 Ngày</span></div><a class="text-sm font-extrabold text-on-surface hover:text-primary transition-colors px-3 py-2" data-path="dang-nhap" href="#">Đăng nhập</a><a class="inline-flex items-center justify-center bg-primary hover:bg-primary-container text-white font-extrabold text-sm px-5 py-2.5 rounded-full border-b-4 border-blue-900 shadow-md active:translate-y-1 active:border-b-0 transition-all" data-path="dang-ky" href="#">Đăng ký ⭐</a></div></div></header><main class="w-full pt-20 min-h-[calc(100vh-20rem)] flex items-center justify-center"><div class="flex flex-col w-full">
+<div class="relative w-full py-10 lg:py-16 px-4 sm:px-6 lg:px-8 overflow-hidden flex items-center justify-center">
+<div class="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-primary-fixed blur-3xl opacity-50 pointer-events-none"></div>
+<div class="absolute top-1/2 -right-24 w-80 h-80 rounded-full bg-secondary-container blur-3xl opacity-40 pointer-events-none"></div>
+<div class="absolute -bottom-20 left-1/3 w-72 h-72 rounded-full bg-tertiary-fixed blur-2xl opacity-30 pointer-events-none"></div>
+<div class="relative w-full max-w-md mx-auto flex flex-col items-center justify-center z-10">
+
+<div class="flex justify-center w-full">
+<div class="w-full max-w-md bg-surface-container-lowest p-6 sm:p-8 rounded-3xl shadow-xl shadow-primary/10 relative">
+<div class="absolute -top-3 -right-3 w-10 h-10 rounded-2xl bg-secondary-container flex items-center justify-center shadow-md animate-bounce-gentle">
+<span class="material-symbols-outlined text-on-secondary-container text-xl" style="font-variation-settings: 'FILL' 1;">stars</span>
+</div>
+<div class="flex flex-col space-y-6">
+<div class="p-1.5 bg-surface-container rounded-full flex relative shadow-inner">
+<button class="flex-1 py-2.5 rounded-full font-label-md text-label-md transition-all duration-200 flex items-center justify-center gap-2 bg-surface-container-lowest text-primary shadow-md" id="tab-login-btn" onclick="switchAuthTab('login')">
+<span class="material-symbols-outlined text-base" style="font-variation-settings: 'FILL' 1;">lock_open</span>
+<span class="">Đăng Nhập</span>
+</button>
+<button class="flex-1 py-2.5 rounded-full font-label-md text-label-md transition-all duration-200 flex items-center justify-center gap-2 text-on-surface-variant hover:text-primary" id="tab-signup-btn" onclick="switchAuthTab('signup')">
+<span class="material-symbols-outlined text-base">person_add</span>
+<span class="">Tạo Tài Khoản</span>
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+</button>
+</div>
+<div class="text-center">
+<h3 class="font-headline-md text-headline-md text-on-surface" id="auth-title">Chào mừng trở lại! 👋</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1" id="auth-subtitle">Sẵn sàng duy trì chuỗi học tập bứt phá hôm nay.</p>
+</div>
+<button class="w-full py-3 px-4 rounded-2xl bg-surface-container-low hover:bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-3 transition shadow-sm active:scale-[0.98]" type="button">
+<svg class="w-5 h-5" viewBox="0 0 24 24">
+<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
+<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
+<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"></path>
+<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"></path>
+</svg>
+<span class="">Tiếp tục nhanh với Google</span>
+</button>
+<div class="relative flex items-center justify-center">
+<div class="w-full border-t border-outline-variant/50"></div>
+<span class="bg-surface-container-lowest px-4 text-xs font-bold text-outline uppercase tracking-wider absolute">hoặc email</span>
+</div>
+<form class="space-y-4" id="auth-form" onsubmit="event.preventDefault(); triggerAuthSuccess();">
+<div class="hidden space-y-1.5 transition-all" id="field-fullname">
+<label class="font-label-sm text-label-sm text-on-surface-variant flex items-center justify-between">
+<span class="">Họ và tên của bạn</span>
+<span class="text-xs text-primary font-bold">Thành viên mới</span>
+</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-4 text-primary text-xl">face</span>
+<input class="w-full pl-12 pr-4 py-3 rounded-2xl bg-surface-container-low text-on-surface placeholder:text-outline/70 font-body-sm text-body-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary shadow-inner transition" id="input-fullname" placeholder="Ví dụ: Hoàng Minh Anh" type="text">
+</div>
+</div>
+<div class="space-y-1.5">
+<label class="font-label-sm text-label-sm text-on-surface-variant flex items-center justify-between">
+<span class="">Địa chỉ Email</span>
+<span class="text-xs text-secondary font-bold">Bảo mật 100%</span>
+</label>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-4 text-secondary text-xl">alternate_email</span>
+<input class="w-full pl-12 pr-4 py-3 rounded-2xl bg-surface-container-low text-on-surface placeholder:text-outline/70 font-body-sm text-body-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary shadow-inner transition" id="input-email" placeholder="tenban@nhiphoc.edu.vn" required="" type="email">
+</div>
+</div>
+<div class="space-y-1.5">
+<div class="flex items-center justify-between">
+<label class="font-label-sm text-label-sm text-on-surface-variant">Mật mã mở khoá</label>
+<a class="font-label-sm text-label-sm text-primary hover:underline" href="#" id="forgot-link">Quên mật khẩu?</a>
+</div>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-4 text-tertiary text-xl">key</span>
+<input class="w-full pl-12 pr-12 py-3 rounded-2xl bg-surface-container-low text-on-surface placeholder:text-outline/70 font-body-sm text-body-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary shadow-inner transition" id="input-password" placeholder="Tối thiểu 8 ký tự an toàn" required="" type="password">
+<button class="absolute right-4 text-outline hover:text-on-surface" onclick="togglePassVisibility()" type="button">
+<span class="material-symbols-outlined text-lg" id="eye-icon">visibility</span>
+</button>
+</div>
+</div>
+<div class="hidden items-start gap-2.5 pt-1" id="terms-box">
+<input class="mt-1 w-4 h-4 rounded-md text-primary focus:ring-primary border-outline-variant bg-surface-container-low" id="accept-terms" type="checkbox">
+<label class="font-body-sm text-xs text-on-surface-variant leading-relaxed" for="accept-terms">
+                  Tôi đồng ý với <a class="text-primary font-bold hover:underline" href="#">Quy tắc học tập</a> và cam kết rèn luyện theo nhịp khoa học.
+                </label>
+</div>
+<button class="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-container hover:brightness-105 text-white font-label-lg text-label-lg shadow-[0_6px_0_0_#003ea8] active:translate-y-1 active:shadow-[0_2px_0_0_#003ea8] transition-all duration-150 flex items-center justify-center gap-2 mt-4" id="submit-button" type="submit">
+<span id="btn-text" class="">Bắt Đầu Học Ngay</span>
+<span class="material-symbols-outlined text-xl">arrow_forward</span>
+</button>
+</form>
+<div class="hidden p-3 rounded-2xl bg-secondary-container text-on-secondary-container font-label-md text-label-md text-center animate-bounce-gentle" id="status-toast">
+              ✨ Đang thiết lập nhịp học cho bạn... Chờ chút xíu nhé!
+            </div>
+<div class="pt-2 text-center">
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+<span id="switch-prompt" class="">Bạn chưa có tài khoản?</span>
+<button class="text-primary font-bold hover:underline ml-1" id="switch-link" onclick="toggleAuthMode()" type="button">Đăng ký thành viên</button>
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+<script>
+  let currentAuthMode = 'login';
+
+  function switchAuthTab(mode) {
+    currentAuthMode = mode;
+    const loginBtn = document.getElementById('tab-login-btn');
+    const signupBtn = document.getElementById('tab-signup-btn');
+    const fullnameField = document.getElementById('field-fullname');
+    const forgotLink = document.getElementById('forgot-link');
+    const termsBox = document.getElementById('terms-box');
+    const authTitle = document.getElementById('auth-title');
+    const authSubtitle = document.getElementById('auth-subtitle');
+    const btnText = document.getElementById('btn-text');
+    const switchPrompt = document.getElementById('switch-prompt');
+    const switchLink = document.getElementById('switch-link');
+
+    if (mode === 'signup') {
+      loginBtn.className = 'flex-1 py-2.5 rounded-full font-label-md text-label-md transition-all duration-200 flex items-center justify-center gap-2 text-on-surface-variant hover:text-primary';
+      signupBtn.className = 'flex-1 py-2.5 rounded-full font-label-md text-label-md transition-all duration-200 flex items-center justify-center gap-2 bg-surface-container-lowest text-primary shadow-md';
+      fullnameField.classList.remove('hidden');
+      forgotLink.classList.add('hidden');
+      termsBox.classList.remove('hidden');
+      termsBox.classList.add('flex');
+      authTitle.innerText = 'Tạo tài khoản mới ✨';
+      authSubtitle.innerText = 'Gia nhập cộng đồng học tập thông minh và có kế hoạch.';
+      btnText.innerText = 'Tạo Tài Khoản Ngay';
+      switchPrompt.innerText = 'Đã có tài khoản Nhịp Học?';
+      switchLink.innerText = 'Đăng nhập lại';
+    } else {
+      signupBtn.className = 'flex-1 py-2.5 rounded-full font-label-md text-label-md transition-all duration-200 flex items-center justify-center gap-2 text-on-surface-variant hover:text-primary';
+      loginBtn.className = 'flex-1 py-2.5 rounded-full font-label-md text-label-md transition-all duration-200 flex items-center justify-center gap-2 bg-surface-container-lowest text-primary shadow-md';
+      fullnameField.classList.add('hidden');
+      forgotLink.classList.remove('hidden');
+      termsBox.classList.add('hidden');
+      termsBox.classList.remove('flex');
+      authTitle.innerText = 'Chào mừng trở lại! 👋';
+      authSubtitle.innerText = 'Sẵn sàng duy trì chuỗi học tập bứt phá hôm nay.';
+      btnText.innerText = 'Bắt Đầu Học Ngay';
+      switchPrompt.innerText = 'Bạn chưa có tài khoản?';
+      switchLink.innerText = 'Đăng ký thành viên';
+    }
+  }
+
+  function toggleAuthMode() {
+    if (currentAuthMode === 'login') {
+      switchAuthTab('signup');
+    } else {
+      switchAuthTab('login');
+    }
+  }
+
+  function togglePassVisibility() {
+    const passInput = document.getElementById('input-password');
+    const eyeIcon = document.getElementById('eye-icon');
+    if (passInput.type === 'password') {
+      passInput.type = 'text';
+      eyeIcon.innerText = 'visibility_off';
+    } else {
+      passInput.type = 'password';
+      eyeIcon.innerText = 'visibility';
+    }
+  }
+
+  function triggerAuthSuccess() {
+    const toast = document.getElementById('status-toast');
+    toast.classList.remove('hidden');
+    setTimeout(() => {
+      toast.classList.add('hidden');
+      alert(currentAuthMode === 'login' ? 'Đăng nhập thành công vào Nhịp Học!' : 'Chào mừng bạn đến với Nhịp Học!');
+    }, 1500);
+  }
+</script></main><footer class="w-full bg-[#eef3fd] border-t-2 border-primary/10 mt-12"><div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12"><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8"><div class="lg:col-span-2 space-y-3"><div class="flex items-center gap-2 group"><div class="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center text-white shadow-sm p-1"><img alt="Nhịp Học Logo" class="h-6 w-auto object-contain brightness-0 invert" src="https://lh3.googleusercontent.com/aida/AEtjO1WWgooSR89Kgv9EIfUdkH3uX3r9WLU41PHTFne5vIKOT0GtyOwRWSbvyuRaQGZETU4VblxmZYsHYwlGKxJCofAx5AL3Ado2HcFygjwWlTeJm_LyfCnB4A-T2C3Y2l77LT27QDroLxkP1EEb32WMbyVTkLJ1fO9Sjk1xbbEDdr6NpGywmnR36W6vKRVrGhX_WLVRp4qemTRRx4gHGk2IjS9NAMQgq0vF4q0f3_1jN0vUN9vOoTZCANPJWwG_"></div><span class="text-xl font-black text-primary">Nhịp Học</span></div><p class="text-xs sm:text-sm font-medium text-on-surface-variant max-w-sm leading-relaxed">Nền tảng lập kế hoạch và quản lý tiến độ học tập cá nhân hóa, giúp bạn chủ động phân bổ tác vụ, làm chủ deadline và duy trì nhịp học khoa học.</p><div class="flex items-center gap-2 text-on-surface-variant bg-white px-3 py-1.5 rounded-full border border-blue-100 w-fit text-xs font-bold shadow-sm"><span class="material-symbols-outlined text-[18px] text-secondary">schedule</span><span class="">Nhịp học tối ưu cho trí tuệ sáng tạo 🌟</span></div></div><div class="space-y-2"><h3 class="text-sm font-black text-on-surface uppercase tracking-wider">Công cụ lập lịch</h3><ul class="space-y-1.5"><li class="text-xs font-semibold text-on-surface-variant hover:text-primary cursor-pointer transition-colors">Quản lý To-do List thông minh</li><li class="text-xs font-semibold text-on-surface-variant hover:text-primary cursor-pointer transition-colors">Radar kiểm soát Deadline</li><li class="text-xs font-semibold text-on-surface-variant hover:text-primary cursor-pointer transition-colors">Bộ đếm Pomodoro nhịp điệu</li><li class="text-xs font-semibold text-on-surface-variant hover:text-primary cursor-pointer transition-colors">Phân tích nhịp não bộ cá nhân</li></ul></div><div class="space-y-2"><h3 class="text-sm font-black text-on-surface uppercase tracking-wider">Tài nguyên</h3><ul class="space-y-1.5"><li class="text-xs font-semibold text-on-surface-variant hover:text-primary cursor-pointer transition-colors">Kho đề ôn thi chuẩn hóa</li><li class="text-xs font-semibold text-on-surface-variant hover:text-primary cursor-pointer transition-colors">Nhật ký Pomodoro &amp; Streak</li><li class="text-xs font-semibold text-on-surface-variant hover:text-primary cursor-pointer transition-colors">Thư viện sơ đồ tư duy</li><li class="text-xs font-semibold text-on-surface-variant hover:text-primary cursor-pointer transition-colors">Cộng đồng học sinh tài năng</li></ul></div><div class="space-y-2"><h3 class="text-sm font-black text-on-surface uppercase tracking-wider">Về Nhịp Học</h3><ul class="space-y-1.5"><li class="text-xs font-semibold text-on-surface-variant hover:text-primary cursor-pointer transition-colors">Giới thiệu phương pháp</li><li class="text-xs font-semibold text-on-surface-variant hover:text-primary cursor-pointer transition-colors">Liên hệ: hotro@nhiphoc.edu.vn</li><li class="text-xs font-semibold text-on-surface-variant hover:text-primary cursor-pointer transition-colors">Hotline: 1900 6868</li><li class="text-xs font-semibold text-on-surface-variant hover:text-primary cursor-pointer transition-colors">Điều khoản &amp; Chính sách</li></ul></div></div><div class="mt-8 pt-6 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-on-surface-variant"><p class="text-xs font-medium">© 2024 Nhịp Học Platform. Nền tảng học tập nhịp điệu &amp; rèn luyện thông minh. All rights reserved.</p><div class="flex items-center gap-4 text-xs font-semibold"><span class="hover:text-primary cursor-pointer">Bảo mật thông tin</span><span class="hover:text-primary cursor-pointer">Tiêu chuẩn giáo dục</span></div></div></div></footer>
+
+
+</body></html>

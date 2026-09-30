@@ -1,0 +1,363 @@
+<!DOCTYPE html><html lang="vi" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<meta content="web_dashboard" name="shell-type">
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  body {
+    overscroll-behavior: none;
+  }
+  main > :first-child {
+    margin-top: 0 !important;
+  }
+  main > :last-child {
+    margin-bottom: 0 !important;
+  }
+}
+::-webkit-scrollbar {
+  display: none;
+}
+@keyframes bounce-gentle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.animate-bounce-gentle {
+  animation: bounce-gentle 2.5s ease-in-out infinite;
+}
+</style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">tailwind.config = { 
+  darkMode: "class", 
+  theme: { 
+    extend: { 
+      "colors": { 
+        "primary": "#004ac6",
+        "primary-container": "#2563eb",
+        "secondary": "#006c49",
+        "secondary-container": "#6cf8bb",
+        "tertiary": "#784b00",
+        "tertiary-fixed": "#ffddb8",
+        "background": "#f5f8ff", 
+        "surface": "#f5f8ff", 
+        "surface-container-lowest": "#ffffff",
+        "surface-container-low": "#f0f4ff",
+        "surface-container": "#e7eeff",
+        "surface-container-high": "#dee8ff",
+        "surface-container-highest": "#d8e3fb",
+        "on-surface": "#111c2d", 
+        "on-surface-variant": "#434655", 
+        "outline": "#737686", 
+        "outline-variant": "#c3c6d7",
+        "error": "#ba1a1a"
+      }, 
+      "borderRadius": { 
+        "DEFAULT": "1rem", 
+        "lg": "1.5rem", 
+        "xl": "2rem", 
+        "2xl": "2.25rem", 
+        "3xl": "2.75rem", 
+        "full": "9999px" 
+      }, 
+      "spacing": { 
+        "space-xl": "2.5rem", 
+        "space-md": "1.25rem", 
+        "space-xs": "0.375rem", 
+        "space-sm": "0.75rem", 
+        "margin": "1.5rem", 
+        "space-lg": "1.75rem"
+      }, 
+      "fontFamily": { 
+        "headline-sm": ["Plus Jakarta Sans"], 
+        "headline-md": ["Plus Jakarta Sans"], 
+        "headline-lg": ["Plus Jakarta Sans"], 
+        "body-md": ["Plus Jakarta Sans"], 
+        "body-sm": ["Plus Jakarta Sans"], 
+        "label-md": ["Plus Jakarta Sans"], 
+        "label-sm": ["Plus Jakarta Sans"], 
+        "label-lg": ["Plus Jakarta Sans"] 
+      }
+    } 
+  } 
+};</script>
+</head>
+<body class="bg-[#f5f8ff] font-body-md text-on-surface antialiased selection:bg-secondary-container selection:text-emerald-950">
+<!-- SIDEBAR (Playful Gamified Navigation) -->
+<aside class="fixed left-0 top-0 h-full w-72 bg-white/95 backdrop-blur-xl border-r-2 border-primary/10 shadow-[4px_0_24px_rgba(0,74,198,0.04)] z-50 flex flex-col justify-between">
+<div class="flex flex-col">
+<!-- Brand Logo -->
+<div class="h-20 flex items-center gap-3 px-6 border-b border-blue-100/60">
+<div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary to-primary-container p-1 shadow-md shadow-primary/20 flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[24px]">auto_stories</span>
+</div>
+<div class="flex flex-col">
+<span class="text-2xl font-black tracking-tight text-primary flex items-center gap-1">Nhịp Học <span class="text-amber-500 text-base">✨</span></span>
+<span class="text-[10px] text-primary/70 tracking-wider uppercase font-extrabold mt-0.5">Lộ trình học thích ứng</span>
+</div>
+</div>
+<!-- Navigation links with gamified pills -->
+<nav class="p-4 flex flex-col gap-1.5">
+<a class="flex items-center gap-3 px-4 py-3 rounded-2xl text-on-surface-variant hover:bg-blue-50 hover:text-primary font-bold text-sm transition-all group" href="#">
+<span class="material-symbols-outlined text-[22px] group-hover:scale-110 transition-transform">dashboard</span>
+<span class="">Tổng quan</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-2xl text-on-surface-variant hover:bg-blue-50 hover:text-primary font-bold text-sm transition-all group" href="#">
+<span class="material-symbols-outlined text-[22px] group-hover:scale-110 transition-transform">calendar_month</span>
+<span class="">Lịch học &amp; Deadline</span>
+</a>
+<a class="flex items-center justify-between px-4 py-3 rounded-2xl text-on-surface-variant hover:bg-blue-50 hover:text-primary font-bold text-sm transition-all group" href="#">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[22px] group-hover:scale-110 transition-transform">smart_toy</span>
+<span class="">AI của bạn</span>
+</div>
+<span class="px-2 py-0.5 text-[10px] font-black bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full shadow-xs">Trợ lý</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-2xl text-on-surface-variant hover:bg-blue-50 hover:text-primary font-bold text-sm transition-all group" href="#">
+<span class="material-symbols-outlined text-[22px] group-hover:scale-110 transition-transform">timer</span>
+<span class="">Pomodoro &amp; Focus</span>
+</a>
+<!-- Active Roadmap Route -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-gradient-to-r from-primary to-blue-600 text-white font-extrabold text-sm shadow-md shadow-primary/25 border-b-2 border-blue-900 transition-all" href="#">
+<span class="material-symbols-outlined text-[22px]" style="font-variation-settings: 'FILL' 1;">explore</span>
+<span class="">Lộ trình &amp; Mục tiêu</span>
+<span class="ml-auto text-amber-300 text-xs">⭐</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-2xl text-on-surface-variant hover:bg-blue-50 hover:text-primary font-bold text-sm transition-all group" href="#">
+<span class="material-symbols-outlined text-[22px] group-hover:scale-110 transition-transform">trending_up</span>
+<span class="">Thống kê &amp; Streak</span>
+</a>
+</nav>
+</div>
+<!-- Footer Help/Settings Card -->
+<div class="p-4 flex flex-col gap-1 border-t border-blue-100/60">
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-2xl text-on-surface-variant hover:bg-blue-50 hover:text-primary font-bold text-sm transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="">Cài đặt cá nhân</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2.5 rounded-2xl text-on-surface-variant hover:bg-blue-50 hover:text-primary font-bold text-sm transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">help_outline</span>
+<span class="">Trợ giúp &amp; Phản hồi</span>
+</a>
+</div>
+</aside>
+<!-- MAIN CONTENT WRAPPER -->
+<div class="pl-72">
+<!-- TOP NAVBAR -->
+<header class="fixed top-0 left-72 right-0 h-20 bg-white/90 backdrop-blur-xl border-b-2 border-primary/10 shadow-[0_4px_20px_rgba(0,74,198,0.04)] z-40 px-8 flex items-center justify-between">
+<!-- Quick Search Pill -->
+<div class="flex-1 max-w-md">
+<div class="relative flex items-center bg-[#f0f4ff] rounded-full border-2 border-transparent focus-within:border-primary focus-within:bg-white transition-all shadow-inner">
+<span class="material-symbols-outlined absolute left-3.5 text-primary text-[20px] pointer-events-none">search</span>
+<input class="w-full h-11 pl-11 pr-4 bg-transparent rounded-full font-medium text-sm text-on-surface placeholder:text-outline focus:outline-none" placeholder="Tìm kiếm mục tiêu, kỳ thi, môn học..." type="text">
+</div>
+</div>
+<!-- Right Quick Controls -->
+<div class="flex items-center gap-4">
+<!-- Streak Tag -->
+<div class="hidden lg:flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-100 border border-amber-300 rounded-full font-black text-amber-900 text-xs shadow-xs">
+<span class="text-sm">🔥</span>
+<span class="">0 ngày streak</span>
+</div>
+<!-- Action Button -->
+<button class="flex items-center gap-2 px-5 h-11 bg-primary hover:bg-primary-container text-white font-extrabold text-sm rounded-2xl border-b-4 border-blue-900 shadow-md shadow-primary/20 active:translate-y-0.5 active:border-b-2 transition-all cursor-pointer" type="button">
+<span class="material-symbols-outlined text-[20px]">add_circle</span>
+<span class="">+ Khởi tạo mục tiêu</span>
+</button>
+<!-- Notification Bell -->
+<button aria-label="Thông báo" class="relative h-11 w-11 flex items-center justify-center rounded-2xl bg-white border-2 border-blue-100 text-on-surface-variant hover:text-primary hover:border-primary/40 transition-all shadow-xs cursor-pointer" type="button">
+<span class="material-symbols-outlined text-[22px]">notifications</span>
+<span class="absolute top-2.5 right-2.5 h-2.5 w-2.5 rounded-full bg-error ring-2 ring-white"></span>
+</button>
+<!-- Profile Avatar -->
+<div class="flex items-center gap-3 pl-2 cursor-pointer select-none">
+<div class="relative">
+<img alt="Minh Anh" class="w-10 h-10 rounded-2xl object-cover ring-2 ring-primary/20 shadow-xs" src="https://lh3.googleusercontent.com/aida/AEtjO1VbGPBfnuz2q8-GR5OZ-PAr4uHkTR9bVcWPaXAVkDm51BXcl-kL2i9g0yj-xveCMpoUk08E2KjpH1-d48lAxruiNqPay43ItAEyqPmb8z968cIdbNHdXVccCWPDbYlF5jmcaoMzEVUQ9KhdDs5bUOd3JeTLzc_NTbs7GwvT_SQmtuK1Z4Zv0DmP1Zfr_ebW-YNgB9zRaP63SAACS98Esy4uh_G-B1IZqnUyCPZSn_tZ66VdBEgf7cf8qGtu">
+<span class="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-emerald-500 ring-2 ring-white"></span>
+</div>
+<div class="hidden md:flex flex-col text-left">
+<span class="font-extrabold text-sm text-on-surface leading-tight">Minh Anh</span>
+<span class="font-bold text-xs text-primary leading-tight">Học viên mới ⭐</span>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">expand_more</span>
+</div>
+</div>
+</header>
+<!-- BODY CONTENT -->
+<main class="w-full pt-20 bg-[#f5f8ff] min-h-screen"><div class="flex flex-col w-full px-8 py-8 gap-8">
+<div class="grid grid-cols-12 gap-8 items-start">
+<div class="col-span-12 xl:col-span-8 flex flex-col gap-6">
+<div class="bg-surface-container-lowest rounded-3xl p-8 shadow-xl relative overflow-hidden flex flex-col items-center">
+<div class="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-secondary-container/40 blur-3xl pointer-events-none"></div>
+<div class="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-primary-fixed/50 blur-3xl pointer-events-none"></div>
+<div class="w-full flex items-center justify-between mb-8 relative z-10"><div class="flex items-center gap-3"><span class="p-2.5 rounded-2xl bg-primary/10 text-primary flex items-center justify-center"><span class="material-symbols-outlined text-[24px]">timer</span></span><h1 class="font-headline-sm text-headline-sm text-on-surface">Phòng tập trung</h1></div></div>
+<div class="flex items-center gap-3 p-1.5 bg-surface-container rounded-full mb-10 relative z-10 shadow-inner"><button class="px-5 py-2 rounded-full font-label-lg text-label-lg bg-primary text-on-primary shadow-md transition-all duration-200" id="btn-mode-focus" onclick="setMode('focus', 25, this)">Tập trung 25'</button><button class="px-5 py-2 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all duration-200" id="btn-mode-short" onclick="setMode('short', 5, this)">Nghỉ 5'</button><button class="px-5 py-2 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all duration-200" id="btn-mode-long" onclick="setMode('long', 15, this)">Nghỉ 15'</button></div>
+<div class="relative w-80 h-80 flex items-center justify-center mb-8">
+<svg class="w-full h-full -rotate-90 transform" viewBox="0 0 256 256">
+<circle class="text-surface-container" cx="128" cy="128" fill="none" r="110" stroke="currentColor" stroke-width="16"></circle>
+<circle class="text-primary-container transition-all duration-1000 ease-linear" cx="128" cy="128" fill="none" id="timer-progress" r="110" stroke="currentColor" stroke-dasharray="691.15" stroke-dashoffset="0" stroke-linecap="round" stroke-width="16" style="stroke-dashoffset: 0;"></circle>
+</svg>
+<div class="absolute flex flex-col items-center justify-center text-center">
+<span class="font-display-hero text-display-hero tracking-tighter text-on-surface select-none" id="timer-display">25:00</span>
+<span class="hidden" id="timer-status-text" style="opacity: 0;"></span>
+</div>
+</div>
+<div class="flex flex-col items-center gap-3 mb-8 w-full max-w-xs relative z-10">
+<div class="flex items-center justify-between w-full">
+<span class="font-label-md text-label-md text-on-surface-variant">Chu kỳ phiên hôm nay</span>
+<span class="font-badge-counter text-badge-counter text-primary" id="cycle-count-text">0 / 4</span>
+</div>
+<div class="flex items-center justify-center gap-3 w-full">
+<div class="flex-1 h-3.5 rounded-full bg-surface-container transition-colors" id="dot-1"></div>
+<div class="flex-1 h-3.5 rounded-full bg-surface-container transition-colors" id="dot-2"></div>
+<div class="flex-1 h-3.5 rounded-full bg-surface-container transition-colors" id="dot-3"></div>
+<div class="flex-1 h-3.5 rounded-full bg-surface-container transition-colors" id="dot-4"></div>
+</div>
+</div>
+<div class="flex items-center gap-4 relative z-10">
+<button class="px-10 py-4 rounded-2xl bg-primary hover:bg-primary-container text-on-primary font-headline-md text-headline-md shadow-xl transition-all duration-150 active:translate-y-1 active:shadow-md cursor-pointer flex items-center gap-3" id="btn-toggle-timer" onclick="toggleTimer()">
+<span class="material-symbols-outlined text-[28px]" id="timer-btn-icon" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+<span id="timer-btn-label" class="">Bắt đầu</span>
+</button>
+<button class="p-4 rounded-2xl bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface shadow-md transition-all active:translate-y-0.5 cursor-pointer flex items-center justify-center" onclick="resetTimer()" title="Thiết lập lại thời gian">
+<span class="material-symbols-outlined text-[24px]">restart_alt</span>
+</button>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-3xl p-6 shadow-xl flex flex-col gap-4"><div class="flex items-center gap-2.5"><span class="material-symbols-outlined text-primary text-[22px]">headphones</span><span class="font-headline-sm text-headline-sm text-on-surface">Âm thanh</span></div><div class="grid grid-cols-3 gap-3"><button class="sound-card flex items-center justify-center gap-2.5 p-3 rounded-2xl bg-surface-container-low hover:bg-surface-container text-on-surface transition-all cursor-pointer font-bold text-sm" onclick="selectSound('rain', this)"><span class="material-symbols-outlined text-primary text-[24px]">rainy</span><span class="">Mưa</span></button><button class="sound-card flex items-center justify-center gap-2.5 p-3 rounded-2xl bg-surface-container-low hover:bg-surface-container text-on-surface transition-all cursor-pointer font-bold text-sm" onclick="selectSound('waves', this)"><span class="material-symbols-outlined text-secondary text-[24px]">waves</span><span class="">Sóng</span></button><button class="sound-card flex items-center justify-center gap-2.5 p-3 rounded-2xl bg-surface-container-low hover:bg-surface-container text-on-surface transition-all cursor-pointer font-bold text-sm" onclick="selectSound('lofi', this)"><span class="material-symbols-outlined text-tertiary text-[24px]">local_cafe</span><span class="">Quán cà phê</span></button></div></div>
+</div>
+<div class="col-span-12 xl:col-span-4 flex flex-col gap-6"><div class="bg-surface-container-lowest rounded-3xl p-6 shadow-xl flex flex-col gap-4"><div class="flex items-center justify-between"><div class="flex items-center gap-2.5"><span class="material-symbols-outlined text-primary text-[22px]">group</span><span class="font-headline-sm text-headline-sm text-on-surface">Bạn bè</span></div><span class="px-3 py-1 rounded-full bg-surface-container font-badge-counter text-badge-counter text-on-surface-variant">0 trực tuyến</span></div><button class="w-full py-3 rounded-2xl bg-surface-container-low hover:bg-surface-container text-primary font-label-md text-label-md transition-all active:translate-y-0.5 cursor-pointer flex items-center justify-center gap-2" onclick="inviteFriends()"><span class="material-symbols-outlined text-[20px]">person_add</span><span class="">Mời bạn</span></button></div><div class="bg-surface-container-lowest rounded-3xl p-6 shadow-xl flex flex-col gap-4"><div class="flex items-center justify-between"><div class="flex items-center gap-2.5"><span class="material-symbols-outlined text-secondary text-[22px]">analytics</span><span class="font-headline-sm text-headline-sm text-on-surface">Thống kê</span></div></div><div class="grid grid-cols-2 gap-3"><div class="p-4 rounded-2xl bg-surface-container-low flex flex-col gap-1 items-center justify-center"><span class="material-symbols-outlined text-primary text-[22px]">hourglass_empty</span><span class="font-display-hero-mobile text-display-hero-mobile text-on-surface">0<span class="text-xs text-on-surface-variant ml-1 font-bold">giờ</span></span></div><div class="p-4 rounded-2xl bg-surface-container-low flex flex-col gap-1 items-center justify-center"><span class="material-symbols-outlined text-error text-[22px]">notifications_off</span><span class="font-display-hero-mobile text-display-hero-mobile text-on-surface">0<span class="text-xs text-on-surface-variant ml-1 font-bold">lần</span></span></div></div></div></div>
+</div>
+</div>
+<script>
+  let timerDuration = 25 * 60;
+  let remainingSeconds = timerDuration;
+  let timerInterval = null;
+  let isRunning = false;
+  let completedCycles = 0;
+  let activeSound = null;
+
+  const timerDisplay = document.getElementById('timer-display');
+  const timerProgress = document.getElementById('timer-progress');
+  const timerBtnIcon = document.getElementById('timer-btn-icon');
+  const timerBtnLabel = document.getElementById('timer-btn-label');
+  const timerStatusText = document.getElementById('timer-status-text');
+  const circumference = 2 * Math.PI * 110;
+
+  function updateDisplay() {
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+    timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    const offset = circumference - (remainingSeconds / timerDuration) * circumference;
+    timerProgress.style.strokeDashoffset = offset;
+  }
+
+  function setMode(mode, minutes, buttonElement) {
+    if (isRunning) toggleTimer();
+    timerDuration = minutes * 60;
+    remainingSeconds = timerDuration;
+
+    const buttons = [
+      document.getElementById('btn-mode-focus'),
+      document.getElementById('btn-mode-short'),
+      document.getElementById('btn-mode-long')
+    ];
+    buttons.forEach(btn => {
+      btn.className = "px-5 py-2.5 rounded-full font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all duration-200";
+    });
+
+    buttonElement.className = "px-5 py-2.5 rounded-full font-label-lg text-label-lg bg-primary text-on-primary shadow-md transition-all duration-200";
+    
+    if (mode === 'focus') {
+      timerStatusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-primary animate-ping"></span> Sẵn sàng bắt đầu';
+      timerStatusText.className = "font-label-md text-label-md text-primary mt-1 flex items-center gap-1.5 bg-primary/10 px-3.5 py-1 rounded-full";
+    } else {
+      timerStatusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-secondary animate-ping"></span> Thư giãn tinh thần';
+      timerStatusText.className = "font-label-md text-label-md text-secondary mt-1 flex items-center gap-1.5 bg-secondary-container/40 px-3.5 py-1 rounded-full";
+    }
+    updateDisplay();
+  }
+
+  function toggleTimer() {
+    if (isRunning) {
+      clearInterval(timerInterval);
+      isRunning = false;
+      timerBtnIcon.textContent = 'play_arrow';
+      timerBtnLabel.textContent = 'Tiếp tục phiên học';
+      timerStatusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-outline"></span> Tạm dừng';
+    } else {
+      isRunning = true;
+      timerBtnIcon.textContent = 'pause';
+      timerBtnLabel.textContent = 'Tạm dừng';
+      timerStatusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span> Đang tập trung';
+      
+      timerInterval = setInterval(() => {
+        if (remainingSeconds > 0) {
+          remainingSeconds--;
+          updateDisplay();
+        } else {
+          clearInterval(timerInterval);
+          isRunning = false;
+          handleCycleComplete();
+        }
+      }, 1000);
+    }
+  }
+
+  function resetTimer() {
+    if (isRunning) toggleTimer();
+    remainingSeconds = timerDuration;
+    timerBtnLabel.textContent = 'Bắt đầu phiên học';
+    timerStatusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-primary animate-ping"></span> Sẵn sàng bắt đầu';
+    updateDisplay();
+  }
+
+  function handleCycleComplete() {
+    if (completedCycles < 4) {
+      completedCycles++;
+      document.getElementById('cycle-count-text').textContent = `${completedCycles} / 4`;
+      const dot = document.getElementById(`dot-${completedCycles}`);
+      if (dot) {
+        dot.classList.remove('bg-surface-container');
+        dot.classList.add('bg-secondary');
+      }
+    }
+    timerBtnIcon.textContent = 'replay';
+    timerBtnLabel.textContent = 'Bắt đầu lượt mới';
+    timerStatusText.innerHTML = '<span class="material-symbols-outlined text-[16px] text-secondary">check_circle</span> Hoàn thành tốt lắm!';
+  }
+
+  function selectSound(type, btn) {
+    document.querySelectorAll('.sound-card').forEach(card => {
+      card.classList.remove('bg-surface-container-high', 'shadow-md');
+      card.classList.add('bg-surface-container-low');
+    });
+
+    if (activeSound === type) {
+      activeSound = null;
+    } else {
+      activeSound = type;
+      btn.classList.remove('bg-surface-container-low');
+      btn.classList.add('bg-surface-container-high', 'shadow-md');
+    }
+  }
+
+  function inviteFriends() {
+    alert("Đã sao chép liên kết phòng học tập trung vào bộ nhớ tạm!");
+  }
+
+  updateDisplay();
+</script></main>
+</div>
+
+
+</body></html>

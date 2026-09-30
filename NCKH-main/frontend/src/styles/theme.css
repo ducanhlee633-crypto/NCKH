@@ -1,0 +1,47 @@
+:root { --accent-hue: 216; }
+html[data-theme="dark"] { color-scheme: dark; --canvas: #101722; --card: #1b2534; --ink: #e6edf7; --muted: #b5c0d1; --line: #364459; background: var(--canvas); color: var(--ink); }
+html[data-theme="dark"] body { background: var(--canvas); color: var(--ink); }
+html[data-theme="dark"] :is(.sidebar, .topbar, .dashboard-card, .settings-footer, .save-status, .focus-ring > div, .theme-switch button.selected, dialog) { background: var(--card); color: var(--ink); border-color: var(--line); }
+html[data-theme="dark"] :is(.profile-preview, .field-grid input, .theme-switch, .setting-list > div, .preference-row, .search-box, .chat-composer, .chat-empty, .upload-box, .notebook-empty, .memory-box, .ai-item, .ai-user-message, .focus-stats > div, .sound-options button, .segmented-control, .prompt-grid button) { background: #263449; color: var(--ink); }
+html[data-theme="dark"] :is(h1, h2, h3, .card-header, .field-grid label, .setting-list b, .password-row b, .setting-label, .settings-footer > span, .theme-switch span, .focus-stats strong, .ai-greeting > p) { color: var(--ink); }
+html[data-theme="dark"] :is(.card-description, .page-subtitle, .profile-preview p, .setting-list small, .password-row small, .settings-footer small, .cycle-row, .focus-ring span) { color: var(--muted); }
+html[data-theme="dark"] input { color: var(--ink); }
+html[data-theme="dark"] .sound-options button[aria-pressed="true"] { background: var(--blue); color: #fff; }
+html[data-theme="dark"] .focus-card { background: var(--card); }
+.avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+html[data-theme="dark"] :is(.ghost-button, .icon-button) { background: #263449; color: var(--ink); border-color: var(--line); }
+
+/* Dark surfaces and readable text across every application page. */
+html[data-theme="dark"] { --surface: #1b2534; --blue: hsl(var(--accent-hue,216) 82% 72%); }
+html[data-theme="dark"] :is(.welcome-card,.level-card,.stat-pill,.metric-card,.summary-chip,.roadmap-hero,.roadmap-kpis,.roadmap-notice,.stage-card,.goal-builder,.goals-hero,.goals-overview,.goal-card,.goals-encouragement,.friend-tip,.leaderboard-empty,.focus-tip,.contact-card,.ai-banner,.level-summary,.ai-stat-grid > div,.sidebar-profile,.sidebar-xp,.milestones,.milestone,.study-window,.challenge,.task-item,.deadline-item,.faq-row,.year-month,.month-cell,.day-slot,.time-row > button,.day-popup,.event-composer,.month-timeline,.timeline-heading,.timeline-slot,.quick-add,.time-head,.day-view-head) {
+  background:var(--card); color:var(--ink); border-color:var(--line);
+}
+html[data-theme="dark"] :is(h1,h2,h3,h4,p,label,small,strong,b,em,summary,dt,dd,li,span) { color:inherit; }
+html[data-theme="dark"] :is(.card-header,.header-title,.page-intro,.settings-heading,.welcome-top,.welcome-subtitle,.focus-intro,.streak-visual,.streak-message,.rhythm-quote,.level-note,.eyebrow,.brand-name,.brand-mark,.goal-date,.goal-progress-label,.goal-subject,.goal-note,.goal-action,.goals-heading,.goals-overview-copy,.study-windows,.subject-list > div > div,.challenge,.composer-top,.calendar-nav,.weekday-row,.date-number,.timeline-labels,.month-hour,.mini-week,.mini-days,.roadmap-lessons,.roadmap-bottom,.score-meta,.stage-top,.cycle-row,.online-row,.ai-greeting,.ai-item,.ai-item button,.style-list button,.empty-state,.friend-empty,.notebook-empty,.memory-box,.feedback-card,.faq-item,.heat-days,.heat-legend,.empty-strip,.setting-label,.preference-row,.theme-switch,.field-grid,.password-row,.settings-footer,.setting-list,.save-status,.profile-preview) { color:var(--ink); }
+html[data-theme="dark"] :is(.page-subtitle,.card-description,.report-period,.muted-label,.sidebar-profile-copy small,.sidebar-xp small,.goal-date small,.goal-note,.deadline-item small,.roadmap-lessons small,.chat-composer small,.timeline-labels span,.month-hour,.mini-week,.muted-cell .date-number) { color:var(--muted); }
+html[data-theme="dark"] :is(.nav-item:not(.active),.nav-icon,.heat-cell,.challenge-days span,.mini-chapters span,.count-badge,.session-badge,.goals-count,.brand-caption,.tag,.header-icon,.empty-icon,.goal-icon,.stage-icon,.save-status span,.profile-preview em,.stat-pill > i,.metric-card > span,.summary-chip > i,.deadline-date,.date-number span,.mini-days i.has-events,.prompt-grid i,.ai-avatar,.ai-orb) { color:var(--ink); background:#263449; border-color:var(--line); }
+html[data-theme="dark"] :is(input:not([type="checkbox"]):not([type="radio"]),textarea,select,option) { color:var(--ink); background:#182232; border-color:#53647b; }
+html[data-theme="dark"] :is(input,textarea)::placeholder { color:#afbdd0; opacity:1; }
+html[data-theme="dark"] :is(.ghost-button,.outline-button,.round-button,.today-button,.composer-top button,.sound-options button,.goal-action,.style-list button,.segmented-control button,.view-switcher button,.theme-switch button,.ai-item button,.notebook-empty button,.memory-box button) { color:var(--ink); background:#263449; border-color:#53647b; }
+html[data-theme="dark"] :is(.nav-item.active,.primary-button,.small-action,.success-button,.new-chat,.quick-add button,.chat-composer > button,.sound-options button[aria-pressed="true"],.view-switcher button.active,.segmented-control button.selected,.theme-switch button.selected) { color:#fff; background:hsl(var(--accent-hue,216) 65% 33%); }
+html[data-theme="dark"] :is(.nav-item:hover,.month-cell:hover,.year-month:hover,.timeline-slot:hover,.day-slot:hover) { background:#32455e; color:#fff; }
+html[data-theme="dark"] :is(.heat-cell.current,.heat-cell.selected,.selected-date) { border-color:var(--blue); color:var(--blue); }
+html[data-theme="dark"] .event-pill { background:#263b50; color:#f1f5fb; }
+html[data-theme="dark"] .event-pill :is(b,span,button) { color:inherit; }
+html[data-theme="dark"] :is(.delete-button,.deadline-remove,.event-remove) { background:#512d34; color:#ffd9de; }
+html[data-theme="dark"] .blue-callout { color:#fff; }
+html[data-theme="dark"] .gold-button { color:#3d2900; background:#ffc32f; }
+html[data-theme="dark"] .goals-ring { background:radial-gradient(circle,var(--card) 61%,transparent 62%),conic-gradient(var(--blue) var(--goal-progress), #364459 0); }
+
+html[data-theme="dark"] .progress-line { background:#364459; }
+html[data-theme="dark"] :is(button,a,input,textarea,select):focus-visible { outline:3px solid var(--blue); outline-offset:3px; }
+/* Switches follow the selected accent in both themes; off is neutral gray. */
+html button.toggle[aria-checked="false"] { background:#747b85; }
+html button.toggle[aria-checked="true"] { background:hsl(var(--accent-hue,216) 65% 45%); }
+html button.toggle i { background:#fff; }
+html .setting-list > div:has([aria-checked="true"]) > span { color:hsl(var(--accent-hue,216) 75% 28%); background:hsl(var(--accent-hue,216) 70% 88%); }
+html .setting-list > div:has([aria-checked="false"]) > span { color:#51565e; background:#d5d8dc; }
+html[data-theme="dark"] .setting-list > div:has([aria-checked="true"]) > span { color:hsl(var(--accent-hue,216) 85% 85%); background:hsl(var(--accent-hue,216) 45% 28%); }
+html[data-theme="dark"] .setting-list > div:has([aria-checked="false"]) > span { color:#d3d8e0; background:#414852; }
+
+html[data-theme="dark"] :is(.goal-date,.goal-subject,.online-row span,.password-row > span,.view-switcher,.level-summary .progress-line,.mini-chapters span,.style-list i,.score-ring,.timer-ring,.ai-stat-grid div,.audit-line) { background:#263449; color:var(--ink); border-color:var(--line); }
