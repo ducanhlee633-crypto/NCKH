@@ -1,0 +1,18 @@
+import { CardHeader, PageIntro, ProgressBar, SectionCard, SegmentedControl } from '../components/PageComponents'
+
+const heatmap = Array.from({ length: 35 }, (_, index) => new Date(Date.UTC(2026, 7, 31 + index)))
+const subjects = ['Toán', 'Vật Lý', 'Hóa Học', 'Tiếng Anh']
+
+export default function StatsPage() {
+  return (
+    <>
+      <PageIntro eyebrow="✨ NHỊP HỌC CÁ NHÂN · THÁNG 9/2026" title="Thống kê học tập" subtitle="Nhìn lại tiến bộ để biết hôm nay nên học gì tiếp theo.">
+        <div className="intro-actions"><SegmentedControl items={['Tuần này', 'Tháng này', 'Kỳ 2026–2027']} /><button className="ghost-button">⇩ Xuất báo cáo PDF</button></div>
+      </PageIntro>
+      <div className="metric-grid">{[['🔥', 'Chuỗi ngày', '0 ngày', 'gold'], ['◷', 'Tập trung', '0h', 'blue'], ['✅', 'Hoàn thành', '0%', 'mint'], ['🎯', 'Độ chính xác', '0%', 'violet']].map(([icon, label, value, tone]) => <div className={'metric-card ' + tone} key={label}><span>{icon}</span><div><small>{label}</small><b>{value}</b></div></div>)}</div>
+      <SectionCard className="heatmap-card"><div className="heatmap-heading"><CardHeader icon="▣" title="Lịch chuỗi học tập & Nhiệt kế kỷ luật 🔥" tone="orange" /><div className="heat-legend"><span>Ít</span><i /><i /><i /><i /><span>Nhiều (&gt;4h)</span></div></div><div className="heatmap-grid"><div className="heat-days">{['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => <b key={day}>{day}</b>)}</div><div className="heat-cells">{heatmap.map((date, index) => <div className={'heat-cell' + (index === 26 ? ' current' : '') + (date.getUTCMonth() !== 8 ? ' outside-month' : '')} key={index} aria-label={date.getUTCDate() + '/' + (date.getUTCMonth() + 1) + ': 0 giờ học'}><b>{date.getUTCDate()}</b><span>0h</span></div>)}</div><aside className="milestones"><h3>🏅 Cột mốc chuỗi học <span>0 / 3 đạt</span></h3>{['Huy hiệu 7 ngày', 'Huy hiệu 14 ngày', '21 Ngày: Kỷ luật'].map((label, index) => <div className="milestone" key={label}><span>♙</span><b>{label} ...</b><small>Chưa mở khóa • 0 / {(index + 1) * 7} ngày</small><em>🔒</em></div>)}</aside></div></SectionCard>
+      <div className="stats-grid"><SectionCard><CardHeader icon="ϟ" title="Khung giờ học tập" tone="blue" /><div className="study-windows">{[['🌅', 'Sáng', '0h', '07:30 – 11:30'], ['☀️', 'Chiều', '0h', '13:30 – 17:00'], ['🌙', 'Tối', '0h', '19:30 – 22:30']].map(([icon, title, value, time]) => <div className="study-window" key={title}><span>{icon}</span><b>{title}</b><strong>{value}</strong><small>{time}</small></div>)}</div><div className="empty-strip">Dữ liệu sẽ hiển thị sau khi hoàn thành buổi học đầu tiên</div></SectionCard><SectionCard><CardHeader icon="▤" title="Thời lượng theo môn" tone="mint" /><div className="subject-list">{subjects.map((subject) => <div key={subject}><div><b>{subject}</b><span>0h</span></div><ProgressBar value={0} /></div>)}</div></SectionCard></div>
+      <div className="stats-grid"><SectionCard><CardHeader icon="🎯" title="Thử thách tuần" /><div className="challenge"><div><b>Học đều cả sáng (5 ngày)</b><span>0/5 ngày</span></div><div className="challenge-days">{['T2', 'T3', 'T4', 'Hôm nay', 'Mai'].map((day, index) => <span className={index === 3 ? 'current' : ''} key={day}>{day}<small>0p</small></span>)}</div><footer>Thưởng: +500 điểm rèn luyện <button className="small-action">Bắt đầu</button></footer></div></SectionCard><div className="blue-callout"><span>0 / 30 ngày</span><h2>Chuỗi 30 ngày</h2><p>Duy trì thói quen mỗi ngày để kích hoạt trợ lý AI chuyên sâu.</p><ProgressBar value={0} /><button className="gold-button">Nhắc nhở học tập 🔥</button></div></div>
+    </>
+  )
+}

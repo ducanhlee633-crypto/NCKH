@@ -1,0 +1,12 @@
+:root { --accent-hue: 216; }
+html[data-theme="dark"] { color-scheme: dark; --canvas: #101722; --card: #1b2534; --ink: #e6edf7; --muted: #b5c0d1; --line: #364459; background: var(--canvas); color: var(--ink); }
+html[data-theme="dark"] body { background: var(--canvas); color: var(--ink); }
+html[data-theme="dark"] :is(.sidebar, .topbar, .dashboard-card, .settings-footer, .save-status, .focus-ring > div, .theme-switch button.selected, dialog) { background: var(--card); color: var(--ink); border-color: var(--line); }
+html[data-theme="dark"] :is(.profile-preview, .field-grid input, .theme-switch, .setting-list > div, .preference-row, .search-box, .chat-composer, .chat-empty, .upload-box, .notebook-empty, .memory-box, .ai-item, .ai-user-message, .focus-stats > div, .sound-options button, .segmented-control, .prompt-grid button) { background: #263449; color: var(--ink); }
+html[data-theme="dark"] :is(h1, h2, h3, .card-header, .field-grid label, .setting-list b, .password-row b, .setting-label, .settings-footer > span, .theme-switch span, .focus-stats strong, .ai-greeting > p) { color: var(--ink); }
+html[data-theme="dark"] :is(.card-description, .page-subtitle, .profile-preview p, .setting-list small, .password-row small, .settings-footer small, .cycle-row, .focus-ring span) { color: var(--muted); }
+html[data-theme="dark"] input { color: var(--ink); }
+html[data-theme="dark"] .sound-options button[aria-pressed="true"] { background: var(--blue); color: #fff; }
+html[data-theme="dark"] .focus-card { background: var(--card); }
+.avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+html[data-theme="dark"] :is(.ghost-button, .icon-button) { background: #263449; color: var(--ink); border-color: var(--line); }
