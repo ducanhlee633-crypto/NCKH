@@ -5,7 +5,7 @@ import useStoredState from '../data/useStoredState'
 import useScheduleBlocks from '../data/useScheduleBlocks'
 import useDeadlines from '../data/useDeadlines'
 import { CardHeader, EmptyState, ProgressBar } from '../components/PageComponents'
-import { createDeadline, displayUser, getSession, onSessionChange, updateDeadline } from '../backendApi'
+import { createDeadline, displayUser, fetchPomodoroSummary, getSession, onSessionChange, updateDeadline } from '../backendApi'
 import { gradeLabel } from '../data/settings'
 import { calendarEvents } from '../data/calendar'
 
@@ -28,6 +28,24 @@ export default function DashboardPage({ onNavigate }) {
   const { eventMap: events, loadingSchedule } = useScheduleBlocks()
   const [roadmaps] = useStoredState('nhip-hoc-roadmaps', [])
   const [focus] = useStoredState('nhip-hoc-focus', {})
+  const [serverFocusMinutes, setServerFocusMinutes] = useState(null)
+  useEffect(() => {
+    const load = async (session) => {
+      if (!session) {
+        setServerFocusMinutes(null)
+        return
+      }
+      try {
+        const day = dateKey(new Date())
+        const summary = await fetchPomodoroSummary(day, day)
+        setServerFocusMinutes(Number(summary.total_minutes ?? 0))
+      } catch {
+        // Rớt mạng: giữ số local.
+      }
+    }
+    load(getSession())
+    return onSessionChange(load)
+  }, [])
   const [showDeadline, setShowDeadline] = useState(false)
   const [title, setTitle] = useState('')
   const [filter, setFilter] = useState('all')
@@ -39,6 +57,8 @@ export default function DashboardPage({ onNavigate }) {
   const nextTask = tasks.find(task => !task.done)
   const upcoming = deadlines.filter(item => { if (deadlineStatusOf(item)) return false; const day = deadlineDateOf(item); if (!day) return false; const due = new Date(day + 'T' + deadlineTimeOf(item)); return due >= now && due.getTime() <= now.getTime() + 7 * 86400000 }).sort((a, b) => (deadlineDateOf(a) + deadlineTimeOf(a)).localeCompare(deadlineDateOf(b) + deadlineTimeOf(b)))
   const sessions = focus.date === today ? focus.sessions || 0 : 0
+  const localFocusMinutes = focus.date === today ? (focus.minutes ?? sessions * 25) : 0
+  const focusMinutesToday = serverFocusMinutes ?? localFocusMinutes
   const week = Array.from({ length: 7 }, (_, index) => { const day = new Date(now); day.setDate(day.getDate() - (day.getDay() + 6) % 7 + index); return day })
   const visibleTasks = tasks.filter(task => filter === 'all' || (filter === 'done' ? task.done : !task.done))
   const calendar = calendarEvents(events, roadmaps, deadlines)
@@ -120,7 +140,7 @@ export default function DashboardPage({ onNavigate }) {
     </section>
 
     <div className="study-summary" aria-label="Tình hình học tập">
-      {[['goals', remaining, 'việc cần làm', 'violet'], ['schedule', upcoming.length, 'hạn nộp trong 7 ngày', 'gold'], ['pomodoro', sessions * 25, 'phút tập trung hôm nay', 'mint']].map(([icon, value, label, tone]) => <div className={'study-summary-item ' + tone} key={icon}><span className={'header-icon ' + tone}><Icon name={icon} /></span><div><b>{value}</b><span>{label}</span></div></div>)}
+      {[['goals', remaining, 'việc cần làm', 'violet'], ['schedule', upcoming.length, 'hạn nộp trong 7 ngày', 'gold'], ['pomodoro', focusMinutesToday, 'phút tập trung hôm nay', 'mint']].map(([icon, value, label, tone]) => <div className={'study-summary-item ' + tone} key={icon}><span className={'header-icon ' + tone}><Icon name={icon} /></span><div><b>{value}</b><span>{label}</span></div></div>)}
     </div>
 
     <div className="content-grid student-dashboard-grid">

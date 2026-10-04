@@ -385,3 +385,207 @@ create policy "deadlines_delete_own"
   on public.deadlines for delete
   to authenticated
   using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------
+-- 9. Bảng friendships: quan hệ bạn bè 2 bước (request + accept).
+--    - user_id   : người gửi lời mời (FK -> profiles.id = auth.users.id)
+--    - friend_id : người nhận lời mời (FK -> profiles.id = auth.users.id)
+--    - status    : 'pending' (đã gửi, chờ đồng ý) | 'accepted' (đã là bạn)
+--    Frontend thao tác bằng `username` (friend_username); backend tự
+--    resolve username -> friend_id nên đổi username không gãy liên kết.
+--    Cách chạy: dán toàn bộ file vào SQL Editor > Run (chạy lại an toàn).
+-- ---------------------------------------------------------------------
+create table if not exists public.friendships (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  friend_id uuid not null references public.profiles (id) on delete cascade,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint friendships_status_check check (status in ('pending', 'accepted')),
+  constraint friendships_no_self_check check (user_id <> friend_id),
+  constraint friendships_unique_pair unique (user_id, friend_id)
+);
+
+create index if not exists friendships_user_id_idx
+  on public.friendships (user_id);
+
+create index if not exists friendships_friend_id_idx
+  on public.friendships (friend_id);
+
+create index if not exists friendships_status_idx
+  on public.friendships (status);
+
+drop trigger if exists friendships_updated_at on public.friendships;
+create trigger friendships_updated_at
+before update on public.friendships
+for each row execute function public.set_profile_updated_at();
+
+alter table public.friendships enable row level security;
+
+-- User được xem các quan hệ mình tham gia (gửi hoặc nhận).
+drop policy if exists "friendships_select_involved" on public.friendships;
+create policy "friendships_select_involved"
+  on public.friendships for select
+  to authenticated
+  using (auth.uid() = user_id or auth.uid() = friend_id);
+
+-- Chỉ được gửi lời mời với tư cách chính mình.
+drop policy if exists "friendships_insert_own" on public.friendships;
+create policy "friendships_insert_own"
+  on public.friendships for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+-- Người gửi hoặc người nhận đều được accept (update pending -> accepted).
+drop policy if exists "friendships_update_involved" on public.friendships;
+create policy "friendships_update_involved"
+  on public.friendships for update
+  to authenticated
+  using (auth.uid() = user_id or auth.uid() = friend_id)
+  with check (auth.uid() = user_id or auth.uid() = friend_id);
+
+-- Hai bên đều được hủy / unfriend (xóa dòng mình tham gia).
+drop policy if exists "friendships_delete_involved" on public.friendships;
+create policy "friendships_delete_involved"
+  on public.friendships for delete
+  to authenticated
+  using (auth.uid() = user_id or auth.uid() = friend_id);
+
+-- ---------------------------------------------------------------------
+-- 10. Bảng feedbacks: góp ý nhỏ trong trang Trợ giúp (1-n với auth.users).
+--     Mỗi góp ý 1 dòng đơn giản, không sửa:
+--       message : nội dung góp ý (1..2000 ký tự)
+--     Cách chạy: dán toàn bộ file vào SQL Editor > Run (chạy lại an toàn).
+-- ---------------------------------------------------------------------
+create table if not exists public.feedbacks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  message text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint feedbacks_message_length check (char_length(message) between 1 and 2000)
+);
+
+create index if not exists feedbacks_user_id_idx
+  on public.feedbacks (user_id);
+
+drop trigger if exists feedbacks_updated_at on public.feedbacks;
+create trigger feedbacks_updated_at
+before update on public.feedbacks
+for each row execute function public.set_profile_updated_at();
+
+alter table public.feedbacks enable row level security;
+
+drop policy if exists "feedbacks_select_own" on public.feedbacks;
+create policy "feedbacks_select_own"
+  on public.feedbacks for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "feedbacks_insert_own" on public.feedbacks;
+create policy "feedbacks_insert_own"
+  on public.feedbacks for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "feedbacks_update_own" on public.feedbacks;
+create policy "feedbacks_update_own"
+  on public.feedbacks for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "feedbacks_delete_own" on public.feedbacks;
+create policy "feedbacks_delete_own"
+  on public.feedbacks for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------
+-- 11. Bảng pomodoro_sessions: phiên focus đã hoàn thành (1-n với auth.users).
+--     Gọn nhẹ: mỗi phiên 1 dòng —
+--       focus_minutes : số phút focus (1..180, timer chạy hết giờ mới ghi)
+--       subject       : môn học khóa cứng 9 lựa chọn
+--                       (Toán, Lí, Hoá, Văn, Sinh, Sử, Địa, Tin, Dự án;
+--                       NULL = không chọn môn)
+--       started_at    : thời điểm bắt đầu (timestamptz)
+--       ended_at      : thời điểm kết thúc (timestamptz, > started_at)
+--     Không lưu phiên đang chạy / nghỉ / hủy giữa chừng. Không sửa.
+--     Cách chạy: dán toàn bộ file vào SQL Editor > Run (chạy lại an toàn).
+-- ---------------------------------------------------------------------
+create table if not exists public.pomodoro_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  focus_minutes integer not null,
+  subject text,
+  started_at timestamptz not null,
+  ended_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint pomodoro_sessions_minutes_check check (focus_minutes between 1 and 180),
+  constraint pomodoro_sessions_subject_check check (
+    subject is null
+    or subject in ('Toán', 'Lí', 'Hoá', 'Văn', 'Sinh', 'Sử', 'Địa', 'Tin', 'Dự án')
+  ),
+  constraint pomodoro_sessions_time_check check (ended_at > started_at)
+);
+
+-- Migration cho DB đã tạo bảng trước khi khóa cứng môn học:
+-- đưa các subject tự do cũ về NULL rồi thay constraint cũ bằng constraint mới.
+update public.pomodoro_sessions
+set subject = null
+where subject is not null
+  and subject not in ('Toán', 'Lí', 'Hoá', 'Văn', 'Sinh', 'Sử', 'Địa', 'Tin', 'Dự án');
+
+alter table public.pomodoro_sessions drop constraint if exists pomodoro_sessions_subject_check;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'pomodoro_sessions_subject_check') then
+    alter table public.pomodoro_sessions
+      add constraint pomodoro_sessions_subject_check check (
+        subject is null
+        or subject in ('Toán', 'Lí', 'Hoá', 'Văn', 'Sinh', 'Sử', 'Địa', 'Tin', 'Dự án')
+      );
+  end if;
+end
+$$;
+
+create index if not exists pomodoro_sessions_user_id_idx
+  on public.pomodoro_sessions (user_id);
+
+create index if not exists pomodoro_sessions_user_started_idx
+  on public.pomodoro_sessions (user_id, started_at);
+
+drop trigger if exists pomodoro_sessions_updated_at on public.pomodoro_sessions;
+create trigger pomodoro_sessions_updated_at
+before update on public.pomodoro_sessions
+for each row execute function public.set_profile_updated_at();
+
+alter table public.pomodoro_sessions enable row level security;
+
+drop policy if exists "pomodoro_sessions_select_own" on public.pomodoro_sessions;
+create policy "pomodoro_sessions_select_own"
+  on public.pomodoro_sessions for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "pomodoro_sessions_insert_own" on public.pomodoro_sessions;
+create policy "pomodoro_sessions_insert_own"
+  on public.pomodoro_sessions for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "pomodoro_sessions_update_own" on public.pomodoro_sessions;
+create policy "pomodoro_sessions_update_own"
+  on public.pomodoro_sessions for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "pomodoro_sessions_delete_own" on public.pomodoro_sessions;
+create policy "pomodoro_sessions_delete_own"
+  on public.pomodoro_sessions for delete
+  to authenticated
+  using (auth.uid() = user_id);

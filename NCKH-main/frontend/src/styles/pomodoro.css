@@ -3,3 +3,15 @@
 .cycle-dots i.completed { background: hsl(var(--accent-hue, 216) 84.5% 54.5%); }
 .sound-options button[aria-pressed="true"] { color: #fff; background: hsl(var(--accent-hue, 216) 84.5% 54.5%); }
 .sound-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.duration-card { display: flex; flex-direction: column; gap: 12px; }
+.duration-hint { margin: 12px 0 0; color: #66748b; font-size: 13px; }
+.duration-grid { display: grid; gap: 10px; margin-top: 12px; }
+.duration-grid label { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; background: hsl(var(--accent-hue, 216) 100% 96.9%); border-radius: 16px; font-size: 13px; font-weight: 800; color: #3c4a61; }
+.duration-input { display: flex; align-items: center; gap: 6px; }
+.duration-input input { width: 72px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; font-weight: 800; text-align: center; background: #fff; color: inherit; }
+.subject-input select { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; font-weight: 700; background: #fff; color: inherit; }
+.duration-input span { font-size: 12px; font-weight: 700; color: #8b97aa; }
+.duration-note { margin: 0; font-size: 12px; color: #8b97aa; }
+.duration-presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.duration-presets .ghost-button { flex: 1 1 auto; min-height: 38px; font-size: 12px; }
+.duration-reset { width: 100%; min-height: 40px; }

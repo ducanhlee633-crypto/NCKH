@@ -349,4 +349,212 @@ export async function deleteDeadline(id) {
   }
 }
 
+/** Bạn bè (friendships): tìm theo username + kết bạn 2 bước. Chỉ gọi khi đã đăng nhập. */
+
+function friendErrorMessage(failure, fallback) {
+  const detail = failure.response?.data?.detail
+  if (detail) {
+    if (detail === 'Already friends.') return 'Hai bạn đã là bạn bè rồi.'
+    if (detail === 'Friend request already sent.') return 'Bạn đã gửi lời mời rồi. Hãy chờ đối phương chấp nhận.'
+    if (detail === 'User not found') return 'Không tìm thấy người dùng này.'
+    if (detail === 'Friend request not found') return 'Lời mời không còn tồn tại.'
+    if (detail === 'Friendship not found') return 'Chưa có quan hệ bạn bè với người này.'
+    if (detail === 'Cannot add yourself as a friend.') return 'Bạn không thể kết bạn với chính mình.'
+    return detail
+  }
+  if (failure.response?.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
+  return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
+}
+
+/** Tên hiển thị của 1 profile bạn bè: nickname -> username. */
+export function friendDisplayName(friend = {}) {
+  return friend.nickname || friend.username || 'Bạn'
+}
+
+/** GET /api/friends/search?q=... — tìm gần đúng theo username, backend đã loại chính mình. */
+export async function searchUsers(query, limit = 20) {
+  const keyword = String(query || '').trim()
+  if (!keyword) return []
+  try {
+    const { data } = await api.get('/api/friends/search', { params: { q: keyword, limit } })
+    return Array.isArray(data) ? data : []
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: friendErrorMessage(failure, 'Không tìm được bạn. Vui lòng thử lại.') }
+  }
+}
+
+/** POST /api/friends/requests {username} — gửi lời mời kết bạn. */
+export async function sendFriendRequest(username) {
+  try {
+    const { data } = await api.post('/api/friends/requests', { username: String(username || '').trim().toLowerCase() })
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: friendErrorMessage(failure, 'Không gửi được lời mời. Vui lòng thử lại.') }
+  }
+}
+
+/** GET /api/friends/requests?direction=incoming|outgoing|all — liệt kê lời mời pending. */
+export async function fetchFriendRequests(direction = 'incoming') {
+  try {
+    const { data } = await api.get('/api/friends/requests', { params: { direction } })
+    return Array.isArray(data) ? data : []
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: friendErrorMessage(failure, 'Không tải được lời mời kết bạn.') }
+  }
+}
+
+/** POST /api/friends/accept/{username} — chấp nhận lời mời đến. */
+export async function acceptFriendRequest(username) {
+  try {
+    const { data } = await api.post(`/api/friends/accept/${encodeURIComponent(String(username || '').trim().toLowerCase())}`)
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: friendErrorMessage(failure, 'Không chấp nhận được lời mời.') }
+  }
+}
+
+/** POST /api/friends/reject/{username} — từ chối lời mời đến (204). */
+export async function rejectFriendRequest(username) {
+  try {
+    await api.post(`/api/friends/reject/${encodeURIComponent(String(username || '').trim().toLowerCase())}`)
+    return null
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: friendErrorMessage(failure, 'Không từ chối được lời mời.') }
+  }
+}
+
+/** GET /api/friends — danh sách bạn đã accepted (cả 2 chiều). */
+export async function fetchFriends() {
+  try {
+    const { data } = await api.get('/api/friends')
+    return Array.isArray(data) ? data : []
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: friendErrorMessage(failure, 'Không tải được danh sách bạn bè.') }
+  }
+}
+
+/** DELETE /api/friends/{username} — hủy kết bạn / hủy lời mời đã gửi / từ chối lời mời đến. */
+export async function removeFriend(username) {
+  try {
+    await api.delete(`/api/friends/${encodeURIComponent(String(username || '').trim().toLowerCase())}`)
+    return null
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: friendErrorMessage(failure, 'Không xóa được quan hệ bạn bè.') }
+  }
+}
+
+/** Góp ý (feedbacks): gửi từ trang Trợ giúp. Chỉ gọi khi đã đăng nhập. */
+
+function feedbackErrorMessage(failure, fallback) {
+  const detail = failure.response?.data?.detail
+  if (detail) return detail
+  if (failure.response?.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
+  return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
+}
+
+/** GET /api/feedback — góp ý của chính mình (mới nhất trước). */
+export async function fetchFeedbacks() {
+  try {
+    const { data } = await api.get('/api/feedback')
+    return Array.isArray(data) ? data : []
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: feedbackErrorMessage(failure, 'Không tải được góp ý.') }
+  }
+}
+
+/** POST /api/feedback {message} — gửi góp ý mới. */
+export async function createFeedback(message) {
+  try {
+    const { data } = await api.post('/api/feedback', { message: String(message || '').trim() })
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: feedbackErrorMessage(failure, 'Không gửi được góp ý. Vui lòng thử lại.') }
+  }
+}
+
+/** DELETE /api/feedback/{id} — xóa góp ý của chính mình (204). */
+export async function deleteFeedback(id) {
+  try {
+    await api.delete(`/api/feedback/${encodeURIComponent(String(id || ''))}`)
+    return null
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: feedbackErrorMessage(failure, 'Không xóa được góp ý.') }
+  }
+}
+
+/** Pomodoro (pomodoro_sessions): ghi phiên focus đã hoàn thành. Chỉ gọi khi đã đăng nhập. */
+
+/** Môn học khóa cứng cho phiên focus — khớp backend + CHECK trong Supabase. */
+export const POMODORO_SUBJECTS = ['Toán', 'Lí', 'Hoá', 'Văn', 'Sinh', 'Sử', 'Địa', 'Tin', 'Dự án']
+
+function pomodoroErrorMessage(failure, fallback) {
+  const detail = failure.response?.data?.detail
+  if (detail) return detail
+  if (failure.response?.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
+  return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
+}
+
+/** Chuẩn hóa payload POST /api/pomodoro: {focus_minutes, subject?, started_at, ended_at}. Subject chỉ gửi khi thuộc 9 môn khóa cứng. */
+export function pomodoroToPayload({ focusMinutes, focus_minutes, subject, startedAt, started_at, endedAt, ended_at } = {}) {
+  const minutes = Number(focus_minutes ?? focusMinutes ?? 0)
+  const toISO = value => (value instanceof Date ? value.toISOString() : String(value || ''))
+  const cleanSubject = String(subject || '').trim()
+  return {
+    focus_minutes: minutes,
+    ...(POMODORO_SUBJECTS.includes(cleanSubject) ? { subject: cleanSubject } : {}),
+    started_at: toISO(started_at ?? startedAt),
+    ended_at: toISO(ended_at ?? endedAt),
+  }
+}
+
+/** GET /api/pomodoro?from=YYYY-MM-DD&to=YYYY-MM-DD — phiên của chính mình. */
+export async function fetchPomodoroSessions(from, to) {
+  const params = new URLSearchParams()
+  if (from) params.set('from', from)
+  if (to) params.set('to', to)
+  const query = params.toString()
+  try {
+    const { data } = await api.get('/api/pomodoro' + (query ? `?${query}` : ''))
+    return Array.isArray(data) ? data : []
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: pomodoroErrorMessage(failure, 'Không tải được phiên tập trung.') }
+  }
+}
+
+/** GET /api/pomodoro/summary?from&to — {total_minutes, total_sessions, days:[{date,total_minutes,total_sessions}]}. */
+export async function fetchPomodoroSummary(from, to) {
+  const params = new URLSearchParams()
+  if (from) params.set('from', from)
+  if (to) params.set('to', to)
+  const query = params.toString()
+  try {
+    const { data } = await api.get('/api/pomodoro/summary' + (query ? `?${query}` : ''))
+    return data && typeof data === 'object'
+      ? { total_minutes: Number(data.total_minutes ?? 0), total_sessions: Number(data.total_sessions ?? 0), days: Array.isArray(data.days) ? data.days : [] }
+      : { total_minutes: 0, total_sessions: 0, days: [] }
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: pomodoroErrorMessage(failure, 'Không tải được thống kê tập trung.') }
+  }
+}
+
+/** POST /api/pomodoro — ghi 1 phiên focus đã hoàn thành (timer chạy hết giờ mới gọi). */
+export async function createPomodoroSession(payload) {
+  try {
+    const { data } = await api.post('/api/pomodoro', pomodoroToPayload(payload))
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: pomodoroErrorMessage(failure, 'Không lưu được phiên tập trung lên server. Vui lòng thử lại.') }
+  }
+}
+
+/** DELETE /api/pomodoro/{id} — xóa phiên của chính mình (204). */
+export async function deletePomodoroSession(id) {
+  try {
+    await api.delete(`/api/pomodoro/${encodeURIComponent(String(id || ''))}`)
+    return null
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: pomodoroErrorMessage(failure, 'Không xóa được phiên tập trung.') }
+  }
+}
+
 export default api

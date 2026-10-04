@@ -230,3 +230,136 @@ class Deadline(BaseModel):
     status: bool = False
     created_at: datetime
     updated_at: datetime
+
+
+# ---------------- Friendships (FriendsPage) ----------------
+# Kết bạn 2 bước: A gửi request (pending) -> B accept (accepted) / reject (xóa).
+# Lưu friend bằng friend_id (UUID FK tới profiles.id) để không gãy khi đổi username.
+# Khi thao tác từ frontend, dùng `username` (friend_username) để tìm/resolve,
+# backend tự map sang friend_id.
+
+FRIENDSHIP_STATUS_VALUES = ("pending", "accepted")
+
+
+class FriendshipRequestCreate(BaseModel):
+    """POST /friends/requests — gửi lời mời bằng username của bạn."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    username: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")
+
+
+class Friendship(BaseModel):
+    """Một quan hệ bạn bè (1 dòng: user_id -> friend_id + status)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    friend_id: UUID
+    status: str = Field(pattern=r"^(pending|accepted)$")
+    created_at: datetime
+    updated_at: datetime
+
+
+class FriendProfile(BaseModel):
+    """Profile rút gọn để tìm kiếm / hiển thị bạn bè (username + nickname)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    username: str | None = None
+    nickname: str | None = None
+
+
+class FriendshipDetail(BaseModel):
+    """Friendship kèm profile của 'người còn lại' (để frontend hiển thị ngay)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    friend_id: UUID
+    status: str = Field(pattern=r"^(pending|accepted)$")
+    created_at: datetime
+    updated_at: datetime
+    friend: FriendProfile | None = None
+
+
+# ---------------- Feedback (HelpPage) ----------------
+# Góp ý nhỏ trong trang Trợ giúp: user gửi 1 dòng message (1..2000 ký tự).
+# Mỗi góp ý 1 dòng, không sửa — chỉ gửi, xem lại, xóa của chính mình.
+
+
+class FeedbackCreate(BaseModel):
+    """POST /feedback — gửi góp ý mới."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    message: str = Field(min_length=1, max_length=2000)
+
+
+class Feedback(BaseModel):
+    """Một góp ý của chính mình."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    message: str
+    created_at: datetime
+    updated_at: datetime
+
+
+# ---------------- Pomodoro / Focus sessions (PomodoroPage.jsx) ----------------
+# Gọn nhẹ theo yêu cầu: mỗi phiên focus đã hoàn thành là 1 dòng —
+# số phút focus + thời gian cụ thể (started_at/ended_at) + môn học.
+# Môn học khóa cứng 9 lựa chọn: Toán, Lí, Hoá, Văn, Sinh, Sử, Địa, Tin, Dự án
+# (None = không chọn môn). Không lưu phiên đang chạy / nghỉ / hủy giữa chừng.
+# Không sửa — chỉ ghi, xem lại, xem thống kê, xóa của chính mình.
+
+POMODORO_SUBJECT_VALUES = ("Toán", "Lí", "Hoá", "Văn", "Sinh", "Sử", "Địa", "Tin", "Dự án")
+
+POMODORO_SUBJECT_PATTERN = r"^(Toán|Lí|Hoá|Văn|Sinh|Sử|Địa|Tin|Dự án)$"
+
+
+class PomodoroSessionCreate(BaseModel):
+    """POST /pomodoro — ghi 1 phiên focus đã hoàn thành."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    focus_minutes: int = Field(ge=1, le=180)
+    subject: str | None = Field(default=None, pattern=POMODORO_SUBJECT_PATTERN)
+    started_at: datetime
+    ended_at: datetime
+
+
+class PomodoroSession(BaseModel):
+    """Một phiên focus đã hoàn thành của chính mình."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    focus_minutes: int
+    subject: str | None = None
+    started_at: datetime
+    ended_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+
+class PomodoroDaySummary(BaseModel):
+    """Tổng hợp 1 ngày: YYYY-MM-DD + số phút + số phiên."""
+
+    date: va_date
+    total_minutes: int
+    total_sessions: int
+
+
+class PomodoroSummary(BaseModel):
+    """GET /pomodoro/summary — tổng phút/phiên trong khoảng ngày."""
+
+    total_minutes: int
+    total_sessions: int
+    days: list[PomodoroDaySummary] = Field(default_factory=list)
