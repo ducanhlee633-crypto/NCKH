@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import useStoredState from '../data/useStoredState'
+import { displayUser, getSession, onSessionChange } from '../backendApi'
 import { defaultSettings, gradeLabel } from '../data/settings'
 import { navigationItems, utilityItems } from '../data/navigation'
 import Icon from './Icon'
@@ -11,6 +13,8 @@ function NavLink({ item, active, onNavigate }) {
 
 export default function Sidebar({ currentPage, onNavigate }) {
   const [profile] = useStoredState('nhip-hoc-settings', defaultSettings)
+  const [accountName, setAccountName] = useState(() => displayUser(getSession())?.name || '')
+  useEffect(() => onSessionChange((session) => setAccountName(displayUser(session)?.name || '')), [])
   return <aside className="sidebar">
     <div>
       <a className="brand" href="#dashboard" aria-label="Nhịp Học — Góc học tập">
@@ -27,8 +31,8 @@ export default function Sidebar({ currentPage, onNavigate }) {
     <div className="sidebar-bottom">
       <div className="sidebar-note"><Icon name="book" /><p>Không cần học thật nhiều.<br /><b>Hãy bắt đầu từ một việc nhỏ.</b></p></div>
       <button className="sidebar-profile" onClick={() => onNavigate('settings')} aria-label="Chỉnh sửa hồ sơ học tập">
-        <div className="avatar">{profile.avatar ? <img src={profile.avatar} alt="" /> : (profile.nickname || profile.name || 'Bạn').slice(0, 2)}</div>
-        <div className="sidebar-profile-copy"><b>{profile.nickname || profile.name || 'Hồ sơ của bạn'}</b><small>{gradeLabel(profile.grade)}</small></div>
+        <div className="avatar">{profile.avatar ? <img src={profile.avatar} alt="" /> : (accountName || 'Bạn').slice(0, 2)}</div>
+        <div className="sidebar-profile-copy"><b>{accountName || 'Hồ sơ của bạn'}</b><small>{gradeLabel(profile.grade)}</small></div>
         <Icon name="settings" size={18} />
       </button>
     </div>

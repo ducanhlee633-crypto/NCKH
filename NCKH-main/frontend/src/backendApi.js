@@ -27,15 +27,33 @@ export function clearSession() {
   window.dispatchEvent(new Event(SESSION_EVENT))
 }
 
-/** Tên hiển thị: ưu tiên profile.name -> username -> email. */
+/** Tên hiển thị: ưu tiên nickname -> name -> username -> email. UserPublic chỉ còn nickname. */
 export function displayUser(session) {
   if (!session) return null
   const { user, profile } = session
   return {
     id: user.id,
-    email: user.email,
-    name: profile?.name || profile?.username || (user.email ? user.email.split('@')[0] : 'Bạn'),
+    email: user.email ?? profile?.email ?? null,
+    name: profile?.nickname || profile?.name || profile?.username || (user.email ? user.email.split('@')[0] : 'Bạn'),
+    nickname: profile?.nickname ?? null,
     username: profile?.username ?? null,
+  }
+}
+
+/** Refresh profile riêng tư từ backend và patch vào session đang lưu. */
+export function updateSessionProfile(profile) {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY)
+    if (!raw) return null
+    const session = JSON.parse(raw)
+    const next = { ...session, profile: { ...(session.profile || {}), ...profile } }
+    // Giữ nguyên expires_at cũ.
+    next.expires_at = session.expires_at
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(next))
+    window.dispatchEvent(new Event(SESSION_EVENT))
+    return next
+  } catch {
+    return null
   }
 }
 
@@ -96,13 +114,14 @@ function backendErrorMessage(failure, fallback) {
 }
 
 /** Đăng ký qua backend (backend gọi Supabase Auth). Có thể trả { needsEmailConfirmation }. */
-export async function registerUser({ email, password, name, username }) {
+export async function registerUser({ email, password, name, username, nickname }) {
   try {
     const { data } = await api.post('/api/auth/signup', {
       email: email.trim(),
       password,
       name: name?.trim() || '',
       ...(username?.trim() ? { username: username.trim() } : {}),
+      ...(nickname?.trim() ? { nickname: nickname.trim() } : {}),
     })
     // Project bật "Confirm email": Supabase không trả session, backend trả 201 kèm detail.
     if (!data?.access_token) return { needsEmailConfirmation: true, email: email.trim() }
@@ -153,17 +172,63 @@ export async function fetchProfile() {
   return data
 }
 
-export async function syncProfile({ username, name }) {
+export async function syncProfile({ username, name, nickname }) {
   const { data } = await api.patch('/api/users/me', {
     ...(username ? { username: username.trim().toLowerCase() } : {}),
+    ...(nickname ? { nickname: nickname.trim().toLowerCase() } : {}),
     ...(name ? { name: name.trim() } : {}),
   })
+  updateSessionProfile(data)
   return data
 }
 
 export async function deleteAccount() {
   await api.delete('/api/users/me')
   clearSession()
+}
+
+/** Lựa chọn Settings (user_preferences): 9 field hiển thị/học tập, không gồm identity. */
+
+export function preferencesFromServer(data = {}) {
+  return {
+    avatar: data.avatar ?? '',
+    theme: data.theme === 'dark' ? 'dark' : 'light',
+    color: ['blue', 'violet', 'gold', 'mint'].includes(data.color) ? data.color : 'blue',
+    ranking: data.ranking ?? true,
+    streak: data.streak ?? true,
+    reminders: data.reminders ?? true,
+    reminderMinutes: Number(data.reminderMinutes ?? data.reminder_minutes ?? 15),
+    weeklyHours: Number(data.weeklyHours ?? data.weekly_hours ?? 24),
+    sound: data.sound ?? true,
+  }
+}
+
+export function preferencesToPayload(settings = {}) {
+  return {
+    avatar: settings.avatar || null,
+    theme: settings.theme === 'dark' ? 'dark' : 'light',
+    color: settings.color,
+    ranking: !!settings.ranking,
+    streak: !!settings.streak,
+    reminders: !!settings.reminders,
+    reminderMinutes: Number(settings.reminderMinutes ?? 15),
+    weeklyHours: Number(settings.weeklyHours ?? 24),
+    sound: !!settings.sound,
+  }
+}
+
+export async function fetchPreferences() {
+  const { data } = await api.get('/api/preferences/me')
+  return preferencesFromServer(data)
+}
+
+export async function savePreferences(settings) {
+  try {
+    const { data } = await api.put('/api/preferences/me', preferencesToPayload(settings))
+    return preferencesFromServer(data)
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: failure.response?.data?.detail || 'Không lưu được thiết lập lên server. Đã giữ bản trên trình duyệt.' }
+  }
 }
 
 export default api

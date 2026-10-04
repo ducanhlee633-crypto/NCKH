@@ -3,6 +3,7 @@ import Modal from '../components/Modal'
 import Icon from '../components/Icon'
 import useStoredState from '../data/useStoredState'
 import { CardHeader, EmptyState, ProgressBar } from '../components/PageComponents'
+import { displayUser, getSession, onSessionChange } from '../backendApi'
 import { gradeLabel } from '../data/settings'
 import { calendarEvents } from '../data/calendar'
 
@@ -12,6 +13,8 @@ export default function DashboardPage({ onNavigate }) {
   const [tasks, saveTasks, error] = useStoredState('nhip-hoc-tasks', [])
   const [deadlines, saveDeadlines, deadlineError] = useStoredState('nhip-hoc-deadlines', [])
   const [profile] = useStoredState('nhip-hoc-settings', {})
+  const [accountName, setAccountName] = useState(() => displayUser(getSession())?.name || 'bạn')
+  useEffect(() => onSessionChange((session) => setAccountName(displayUser(session)?.name || 'bạn')), [])
   const [events] = useStoredState('nhip-hoc-events', {})
   const [roadmaps] = useStoredState('nhip-hoc-roadmaps', [])
   const [focus] = useStoredState('nhip-hoc-focus', {})
@@ -37,7 +40,7 @@ export default function DashboardPage({ onNavigate }) {
   }
   return <>
     <section className="study-welcome">
-      <div><p className="eyebrow">{now.toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' })}</p><h1>Chào {profile.nickname || profile.name || 'bạn'}, hôm nay học gì?</h1><p className="page-subtitle">Một việc vừa sức. Một khoảng tập trung. Từng chút tiến bộ.</p></div>
+      <div><p className="eyebrow">{now.toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' })}</p><h1>Chào {accountName}, hôm nay học gì?</h1><p className="page-subtitle">Một việc vừa sức. Một khoảng tập trung. Từng chút tiến bộ.</p></div>
       <a className="ghost-button" href="#schedule"><Icon name="schedule" size={18} />Xem lịch học</a>
     </section>
 

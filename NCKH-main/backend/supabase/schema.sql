@@ -17,14 +17,47 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   username text,
   name text not null default '',
+  nickname text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint profiles_username_format check (username is null or username ~ '^[a-z0-9_.-]{3,64}$'),
+  constraint profiles_nickname_format check (nickname is null or nickname ~ '^[a-z0-9_.-]{3,64}$'),
   constraint profiles_name_length check (char_length(name) between 0 and 120)
 );
 
 create unique index if not exists profiles_username_lower_idx
   on public.profiles (lower(username)) where username is not null;
+
+-- ---------------------------------------------------------------------
+-- 1b. Migration cho DB đã có: thêm cột nickname nếu chưa có + backfill.
+--     LƯU Ý: ALTER phải chạy TRƯỚC create index nickname,
+--     vì DB cũ chưa có cột này (lỗi 42703 nếu tạo index trước).
+-- ---------------------------------------------------------------------
+alter table public.profiles add column if not exists nickname text;
+
+do $$
+begin
+  -- Backfill nickname từ username (lower) cho các dòng cũ chưa có nickname.
+  update public.profiles
+  set nickname = lower(username)
+  where nickname is null and username is not null;
+exception when others then
+  -- Bỏ qua nếu unique conflict (nickname trùng nhau từ dữ liệu cũ).
+  null;
+end
+$$;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'profiles_nickname_format') then
+    alter table public.profiles
+      add constraint profiles_nickname_format check (nickname is null or nickname ~ '^[a-z0-9_.-]{3,64}$');
+  end if;
+end
+$$;
+
+create unique index if not exists profiles_nickname_lower_idx
+  on public.profiles (lower(nickname)) where nickname is not null;
 
 -- ---------------------------------------------------------------------
 -- 2. Migrate dữ liệu từ bảng cũ `profile` (tự quản password_hash) nếu có.
@@ -49,16 +82,17 @@ $$;
 
 -- ---------------------------------------------------------------------
 -- 3. Trigger: tự tạo profile mỗi khi có auth.users mới (signup thành công).
---    Lấy username/name từ raw_user_meta_data do backend gửi lên.
+--    Lấy username/name/nickname từ raw_user_meta_data do backend gửi lên.
 -- ---------------------------------------------------------------------
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
   meta_username text := nullif((new.raw_user_meta_data ->> 'username'), '');
   meta_name text := coalesce(nullif((new.raw_user_meta_data ->> 'name'), ''), '');
+  meta_nickname text := nullif((new.raw_user_meta_data ->> 'nickname'), '');
 begin
-  insert into public.profiles (id, username, name)
-  values (new.id, meta_username, meta_name)
+  insert into public.profiles (id, username, name, nickname)
+  values (new.id, meta_username, meta_name, meta_nickname)
   on conflict (id) do nothing;
   return new;
 end;
@@ -114,5 +148,61 @@ create policy "profiles_update_own"
 drop policy if exists "profiles_delete_own" on public.profiles;
 create policy "profiles_delete_own"
   on public.profiles for delete
+  to authenticated
+  using (auth.uid() = id);
+
+-- ---------------------------------------------------------------------
+-- 6. Bảng user_preferences: lựa chọn Settings (1-1 với auth.users).
+--    Chỉ 9 field lựa chọn hiển thị/học tập — KHÔNG chứa
+--    name/username/nickname/email/grade/password (đã có endpoint khác).
+-- ---------------------------------------------------------------------
+create table if not exists public.user_preferences (
+  id uuid primary key references auth.users (id) on delete cascade,
+  avatar text,
+  theme text not null default 'light',
+  color text not null default 'blue',
+  ranking boolean not null default true,
+  streak boolean not null default true,
+  reminders boolean not null default true,
+  reminder_minutes integer not null default 15,
+  weekly_hours integer not null default 24,
+  sound boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint user_preferences_theme_check check (theme in ('light', 'dark')),
+  constraint user_preferences_color_check check (color in ('blue', 'violet', 'gold', 'mint')),
+  constraint user_preferences_reminder_minutes_check check (reminder_minutes in (0, 5, 10, 15, 30, 60)),
+  constraint user_preferences_weekly_hours_check check (weekly_hours between 1 and 70)
+);
+
+drop trigger if exists user_preferences_updated_at on public.user_preferences;
+create trigger user_preferences_updated_at
+before update on public.user_preferences
+for each row execute function public.set_profile_updated_at();
+
+alter table public.user_preferences enable row level security;
+
+drop policy if exists "user_preferences_select_own" on public.user_preferences;
+create policy "user_preferences_select_own"
+  on public.user_preferences for select
+  to authenticated
+  using (auth.uid() = id);
+
+drop policy if exists "user_preferences_insert_own" on public.user_preferences;
+create policy "user_preferences_insert_own"
+  on public.user_preferences for insert
+  to authenticated
+  with check (auth.uid() = id);
+
+drop policy if exists "user_preferences_update_own" on public.user_preferences;
+create policy "user_preferences_update_own"
+  on public.user_preferences for update
+  to authenticated
+  using (auth.uid() = id)
+  with check (auth.uid() = id);
+
+drop policy if exists "user_preferences_delete_own" on public.user_preferences;
+create policy "user_preferences_delete_own"
+  on public.user_preferences for delete
   to authenticated
   using (auth.uid() = id);

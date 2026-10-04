@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CardHeader, EmptyState, PageIntro, SectionCard } from '../components/PageComponents'
 import Modal from '../components/Modal'
+import { getSession } from '../backendApi'
 import useStoredState from '../data/useStoredState'
 import { defaultSettings } from '../data/settings'
 const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase().trim()
@@ -12,7 +13,8 @@ export default function FriendsPage({ onNavigate }) {
   const [friends] = useStoredState('nhip-hoc-friends', [])
   const [storedSettings] = useStoredState('nhip-hoc-settings', defaultSettings)
   const settings = { ...defaultSettings, ...storedSettings }
-  const directory = [...new Map([...users, ...friends].filter(user => user.email !== settings.email).map(user => [user.id || user.email, user])).values()]
+  const accountEmail = getSession()?.user?.email || ''
+  const directory = [...new Map([...users, ...friends].filter(user => user.email !== accountEmail).map(user => [user.id || user.email, user])).values()]
   const matches = searched ? directory.filter(user => [user.name, user.nickname, user.email].some(value => normalize(value).includes(normalize(searched)))) : []
   const openSearch = () => { setQuery(''); setSearched(''); setShowSearch(true) }
   return <>

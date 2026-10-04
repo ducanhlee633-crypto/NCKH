@@ -57,10 +57,11 @@ class FakeTable:
                 "id": self._values.get("id", str(uuid4())),
                 "username": self._values.get("username"),
                 "name": self._values.get("name", ""),
+                "nickname": self._values.get("nickname"),
                 "created_at": "2026-01-01T00:00:00Z",
                 "updated_at": "2026-01-01T00:00:00Z",
             }
-            if "duplicate" in str(row["username"] or ""):
+            if "duplicate" in str(row["username"] or "") or "duplicate" in str(row["nickname"] or ""):
                 raise Exception("duplicate key value violates unique constraint")
             self.store[row["id"]] = row
             return SimpleNamespace(data=[row])
@@ -70,6 +71,8 @@ class FakeTable:
             if not row:
                 return SimpleNamespace(data=[])
             if "username" in self._values and "duplicate" in str(self._values["username"] or ""):
+                raise Exception("duplicate key value violates unique constraint")
+            if "nickname" in self._values and "duplicate" in str(self._values["nickname"] or ""):
                 raise Exception("duplicate key value violates unique constraint")
             row.update(self._values)
             return SimpleNamespace(data=[row])

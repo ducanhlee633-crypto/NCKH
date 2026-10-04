@@ -13,6 +13,7 @@ from schema import (
     SessionUser,
     SignupRequest,
     Token,
+    UserPrivate,
     UserPublic,
 )
 from supabase_client import get_supabase_admin, get_supabase_anon
@@ -20,11 +21,16 @@ from supabase_client import get_supabase_admin, get_supabase_anon
 router = APIRouter(prefix="/users", tags=["users"])
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
-PROFILE_COLUMNS = "id,username,name,created_at,updated_at"
+PROFILE_COLUMNS = "id,username,name,nickname,created_at,updated_at"
 PROFILES_TABLE = "profiles"
 
 
 def _clean_username(value: str) -> str:
+    return value.strip().lower()
+
+
+def _clean_nickname(value: str) -> str:
+    # Nickname validate chặt như username: 3-64, [A-Za-z0-9_.-], unique, lowercase.
     return value.strip().lower()
 
 
@@ -33,7 +39,9 @@ def _raise_database_error(error: Exception) -> None:
         raise error
     message = str(error).lower()
     if "duplicate" in message or "unique" in message:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists") from error
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Username or nickname already exists"
+        ) from error
     raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database operation failed") from error
 
 
@@ -74,7 +82,7 @@ def _fetch_profile(user_id: UUID) -> dict | None:
     return result.data[0] if result.data else None
 
 
-def _ensure_profile(user_id: UUID, username: str | None, name: str) -> dict:
+def _ensure_profile(user_id: UUID, username: str | None, name: str, nickname: str | None = None) -> dict:
     """Lấy profile theo auth id; tự tạo nếu trigger handle_new_user chưa kịp chạy."""
     existing = _fetch_profile(user_id)
     if existing:
@@ -82,6 +90,8 @@ def _ensure_profile(user_id: UUID, username: str | None, name: str) -> dict:
     values: dict = {"id": str(user_id), "name": (name or "").strip()}
     if username:
         values["username"] = _clean_username(username)
+    if nickname:
+        values["nickname"] = _clean_nickname(nickname)
     try:
         result = get_supabase_admin().table(PROFILES_TABLE).insert(values).select(PROFILE_COLUMNS).execute()
         return _one(result.data)
@@ -94,24 +104,36 @@ def _ensure_profile(user_id: UUID, username: str | None, name: str) -> dict:
         raise  # pragma: no cover
 
 
-def get_current_profile(current: SupabaseUser = Depends(get_current_supabase_user)) -> UserPublic:
+def _to_private(row: dict, email: str | None = None) -> UserPrivate:
+    data = dict(row)
+    if email is not None:
+        data["email"] = email
+    return UserPrivate.model_validate(data)
+
+
+def _to_public(row: dict) -> UserPublic:
+    return UserPublic.model_validate(row)
+
+
+def get_current_profile(current: SupabaseUser = Depends(get_current_supabase_user)) -> UserPrivate:
     row = _fetch_profile(current.id)
     if not row:
         # Tài khoản Auth tồn tại nhưng chưa có profile (VD: tắt trigger) -> tạo placeholder.
         row = _ensure_profile(current.id, None, "")
-    return UserPublic.model_validate(row)
+    return _to_private(row, current.email)
 
 
 def _to_token(session, profile_row: dict | None) -> Token:
     user = session.user if hasattr(session, "user") else session.get("user")
     uid = getattr(user, "id", None) or user.get("id")
     email = getattr(user, "email", None) or (user.get("email") if isinstance(user, dict) else None)
+    profile = _to_private(profile_row, email) if profile_row else None
     return Token(
         access_token=session.access_token if hasattr(session, "access_token") else session.get("access_token"),
         refresh_token=getattr(session, "refresh_token", None) or session.get("refresh_token"),
         expires_in=getattr(session, "expires_in", None) or session.get("expires_in"),
         user=SessionUser(id=UUID(str(uid)), email=email),
-        profile=UserPublic.model_validate(profile_row) if profile_row else None,
+        profile=profile,
     )
 
 
@@ -121,12 +143,19 @@ def _to_token(session, profile_row: dict | None) -> Token:
 @auth_router.post("/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
 def signup(payload: SignupRequest) -> Token:
     username = _clean_username(payload.username) if payload.username else None
+    nickname = _clean_nickname(payload.nickname) if payload.nickname else None
     try:
         response = get_supabase_anon().auth.sign_up(
             {
                 "email": payload.email.strip(),
                 "password": payload.password,
-                "options": {"data": {"username": username, "name": payload.name.strip()}},
+                "options": {
+                    "data": {
+                        "username": username,
+                        "name": payload.name.strip(),
+                        "nickname": nickname,
+                    }
+                },
             }
         )
     except HTTPException:
@@ -143,7 +172,7 @@ def signup(payload: SignupRequest) -> Token:
             status_code=status.HTTP_201_CREATED,
             detail="Tạo tài khoản thành công. Vui lòng kiểm tra email để xác nhận trước khi đăng nhập.",
         )
-    profile = _ensure_profile(UUID(str(response.user.id)), username, payload.name or "")
+    profile = _ensure_profile(UUID(str(response.user.id)), username, payload.name or "", nickname)
     return _to_token(response.session, profile)
 
 
@@ -214,34 +243,36 @@ def change_password(payload: PasswordChange, current: SupabaseUser = Depends(get
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không đổi được mật khẩu.") from error
 
 
-@auth_router.get("/me", response_model=UserPublic)
-def get_me(profile: UserPublic = Depends(get_current_profile)) -> UserPublic:
+@auth_router.get("/me", response_model=UserPrivate)
+def get_me(profile: UserPrivate = Depends(get_current_profile)) -> UserPrivate:
     return profile
 
 
 # ---------------- Profiles (authorization: chỉ chính mình) ----------------
 
 
-@router.get("/me", response_model=UserPublic)
-def read_own_profile(profile: UserPublic = Depends(get_current_profile)) -> UserPublic:
+@router.get("/me", response_model=UserPrivate)
+def read_own_profile(profile: UserPrivate = Depends(get_current_profile)) -> UserPrivate:
     return profile
 
 
-@router.patch("/me", response_model=UserPublic)
+@router.patch("/me", response_model=UserPrivate)
 def update_own_profile(
     payload: ProfileUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
-) -> dict:
+) -> UserPrivate:
     values = payload.model_dump(exclude_unset=True)
     if "username" in values and values["username"] is not None:
         values["username"] = _clean_username(values["username"])
+    if "nickname" in values and values["nickname"] is not None:
+        values["nickname"] = _clean_nickname(values["nickname"])
     if "name" in values and values["name"] is not None:
         values["name"] = values["name"].strip()
     if not values:
         row = _fetch_profile(current.id)
         if not row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
-        return row
+        return _to_private(row, current.email)
     try:
         result = (
             get_supabase_admin()
@@ -251,7 +282,8 @@ def update_own_profile(
             .select(PROFILE_COLUMNS)
             .execute()
         )
-        return _one(result.data)
+        row = _one(result.data)
+        return _to_private(row, current.email)
     except HTTPException:
         raise
     except Exception as error:
