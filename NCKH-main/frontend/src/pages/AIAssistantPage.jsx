@@ -2,8 +2,8 @@ import useStoredState from '../data/useStoredState'
 import { useEffect, useRef, useState } from 'react'
 import { CardHeader, SectionCard } from '../components/PageComponents'
 
-const prompts = [['ϟ', 'Giải bài'], ['⌁', 'Lập lịch'], ['▤', 'Tóm tắt'], ['✧', 'Ôn tập']]
-const greeting = 'Mình có thể giúp gì cho bạn?'
+const prompts = [['ϟ', 'Gợi ý cách giải', 'Mình học lớp …, đang làm bài … Mình đã thử … Hãy gợi ý bước tiếp theo.'], ['⌁', 'Lên kế hoạch ôn', 'Mình cần ôn môn … trước ngày … Mỗi ngày mình có … phút.'], ['▤', 'Hiểu kiến thức', 'Giải thích kiến thức … bằng một ví dụ phù hợp với lớp …'], ['✧', 'Tự kiểm tra', 'Đặt 5 câu hỏi về … để mình tự kiểm tra phần đã học.']]
+const greeting = 'Bạn đang vướng ở phần nào?'
 
 export default function AIAssistantPage() {
     const [input, setInput, inputError] = useStoredState('nhip-hoc-chat-input', '')
@@ -71,16 +71,17 @@ export default function AIAssistantPage() {
   return (
     <>
       {(uploadError || inputError || messagesError || historyError || activeIdError || filesError) && <p role="alert">{uploadError || inputError || messagesError || historyError || activeIdError || filesError}</p>}
-      <section className="ai-banner"><div className="ai-orb">✦</div><div><p>Trợ lý AI</p><b>Đồng hành học tập cá nhân</b></div><span>● Sẵn sàng hỗ trợ</span></section>
+      <section className="ai-banner"><div className="ai-orb">✦</div><div><h1>Trợ lý học tập</h1><p>Ghi câu hỏi, nêu cách đã làm, tìm phần cần hiểu thêm.</p></div><span>Chưa kết nối AI</span></section>
       <div className="ai-layout ai-layout-simple">
         <aside className="ai-left">
-          <button className="new-chat" onClick={newChat}>⊕ <span>+ Cuộc trò<br />chuyện mới</span></button>
-          <SectionCard><CardHeader icon="◴" title="Lịch sử trò chuyện" />{history.length ? <div className="ai-item-list">{history.map((chat) => <div className="ai-item" key={chat.id}><button className="ai-history-title" aria-pressed={activeId === chat.id} onClick={() => openChat(chat)}>{chat.messages[0].text}</button><button aria-label="Xóa cuộc trò chuyện" onClick={() => { setHistory((old) => old.filter((item) => item.id !== chat.id)); if (activeId === chat.id) setActiveId(null) }}>×</button></div>)}</div> : <div className="chat-empty"><span>□</span><b>Chưa có cuộc trò chuyện nào</b><p>Gửi một câu hỏi đầu tiên để kích hoạt trí tuệ sáng tạo!</p></div>}</SectionCard>
+          <button className="new-chat" onClick={newChat}>＋ <span>Cuộc trò chuyện mới</span></button>
+          <SectionCard><CardHeader icon="◴" title="Lịch sử trò chuyện" />{history.length ? <div className="ai-item-list">{history.map((chat) => <div className="ai-item" key={chat.id}><button className="ai-history-title" aria-pressed={activeId === chat.id} onClick={() => openChat(chat)}>{chat.messages[0].text}</button><button aria-label="Xóa cuộc trò chuyện" onClick={() => { setHistory((old) => old.filter((item) => item.id !== chat.id)); if (activeId === chat.id) setActiveId(null) }}>×</button></div>)}</div> : <div className="chat-empty"><span>□</span><b>Chưa có cuộc trò chuyện nào</b><p>Câu hỏi được lưu trên thiết bị này. Chọn cuộc trò chuyện mới để lưu vào lịch sử.</p></div>}</SectionCard>
           <SectionCard><CardHeader icon="▧" title="Tài liệu & Đề cương" /><input ref={fileRef} hidden type="file" multiple onChange={(event) => { addFiles(event.target.files); event.target.value = '' }} /><button className="upload-box" onClick={() => fileRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); addFiles(event.dataTransfer.files) }}><span>⇧</span><b>Tải lên đề thi hoặc sách</b><small>Kéo thả hoặc chạm để chọn tệp</small></button><div className="ai-item-list">{files.map(({ id, file }) => <div className="ai-item" key={id}><a href={file.data} download={file.name}>{file.name}</a><button aria-label={'Xóa ' + file.name} onClick={() => setFiles((old) => old.filter((item) => item.id !== id))}>×</button></div>)}</div></SectionCard>
         </aside>
         <SectionCard className="ai-chat">
-          {messages.length ? <div className="ai-messages" ref={messagesRef} role="log" aria-label="Tin nhắn trò chuyện">{messages.map((message) => <div className="ai-user-message" key={message.id}><small>Bạn</small><p>{message.text}</p></div>)}</div> : <div className="ai-greeting"><div className="ai-avatar">✦</div><p>{greeting}</p><div className="prompt-grid">{prompts.map(([icon, label]) => <button key={label} onClick={() => { setInput(label + ': '); inputRef.current?.focus() }}><i>{icon}</i><b>{label}</b><span>›</span></button>)}</div></div>}
-          <form className="chat-composer" onSubmit={send}><span>⌕</span><span>Σ</span><input ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} aria-label="Câu hỏi cho trợ lý AI" placeholder="Hỏi bất kỳ điều gì..." /><span>♩</span><button disabled={!input.trim()} aria-label="Gửi câu hỏi">↑</button><small>Gợi ý: Hãy nêu rõ phần bạn chưa hiểu.</small><small>Học từng bước, hiểu thật sâu.</small></form>
+          {messages.length ? <div className="ai-messages" ref={messagesRef} role="log" aria-label="Tin nhắn trò chuyện">{messages.map((message) => <div className="ai-user-message" key={message.id}><small>Bạn</small><p>{message.text}</p></div>)}</div> : <div className="ai-greeting"><div className="ai-avatar">✦</div><p>{greeting}</p><div className="prompt-grid">{prompts.map(([icon, label, prompt]) => <button key={label} onClick={() => { setInput(prompt); inputRef.current?.focus() }}><i>{icon}</i><b>{label}</b><span>›</span></button>)}</div></div>}
+          <form className="chat-composer" onSubmit={send}><input ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} aria-label="Câu hỏi học tập" placeholder="Nêu môn, lớp và phần bạn chưa hiểu…" /><button disabled={!input.trim()} aria-label="Lưu câu hỏi">↑</button></form>
+          <p className="ai-service-note" role="status">Câu hỏi và tài liệu chỉ được lưu trên thiết bị này. Trợ lý chưa thể trả lời khi chưa kết nối dịch vụ AI.</p>
         </SectionCard>
 
       </div>

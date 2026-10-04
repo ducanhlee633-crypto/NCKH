@@ -1,4 +1,6 @@
-export const defaultSettings = { name: '', nickname: '', email: '', avatar: '', theme: 'light', color: 'blue', ranking: true, streak: true, sound: true, reminders: true, reminderMinutes: 15, weeklyHours: 24 }
+export const defaultSettings = { name: '', nickname: '', email: '', avatar: '', grade: '', theme: 'light', color: 'blue', ranking: true, streak: true, sound: true, reminders: true, reminderMinutes: 15, weeklyHours: 24 }
+export const grades = ['6', '7', '8', '9', '10', '11', '12']
+export const gradeLabel = grade => grades.includes(String(grade)) ? `Lớp ${grade} · ${Number(grade) <= 9 ? 'THCS' : 'THPT'}` : 'Học theo nhịp của bạn'
 export const colors = { blue: ['Xanh dương', 216], violet: ['Tím', 268], gold: ['Vàng', 38], mint: ['Xanh lá', 162] }
 export function loadSettings() {
   try { return { ...defaultSettings, ...JSON.parse(localStorage.getItem('nhip-hoc-settings')) } } catch { return { ...defaultSettings } }

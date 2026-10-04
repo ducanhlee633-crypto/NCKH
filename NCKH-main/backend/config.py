@@ -12,9 +12,11 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_KEY"),
     )
     supabase_anon_key: str | None = Field(default=None, validation_alias="SUPABASE_ANON_KEY")
-    jwt_secret_key: str = Field(..., validation_alias="JWT_SECRET_KEY")
-    jwt_algorithm: str = Field(default="HS256", validation_alias="JWT_ALGORITHM")
-    jwt_expire_minutes: int = Field(default=60, validation_alias="JWT_EXPIRE_MINUTES", ge=5, le=10080)
+    # Secret dùng để verify Supabase Auth JWT locally (HS256).
+    # Lấy ở Supabase Dashboard > Project Settings > API > JWT Secret.
+    # Nếu để trống, backend sẽ verify token bằng cách gọi Supabase Auth API (chậm hơn nhưng vẫn an toàn).
+    supabase_jwt_secret: str | None = Field(default=None, validation_alias="SUPABASE_JWT_SECRET")
+    auto_confirm_email: bool = Field(default=False, validation_alias="AUTO_CONFIRM_EMAIL")
 
     model_config = SettingsConfigDict(env_file=Path(__file__).resolve().parent / ".env", extra="ignore")
 

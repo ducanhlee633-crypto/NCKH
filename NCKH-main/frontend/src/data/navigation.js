@@ -1,15 +1,15 @@
 export const navigationItems = [
-  { icon: '▦', label: 'Tổng quan', path: 'dashboard' },
-  { icon: '▣', label: 'Lịch học & Deadline', path: 'schedule' },
-  { icon: '♙', label: 'AI của bạn', path: 'assistant', badge: 'Trợ lý' },
-  { icon: '◷', label: 'Pomodoro & Focus', path: 'pomodoro' },
-  { icon: '⌁', label: 'Lộ trình & Khóa học', path: 'roadmap' },
-  { icon: '🎯', label: 'Mục tiêu của bạn', path: 'goals' },
-  { icon: '↗', label: 'Thống kê & Streak', path: 'stats' },
-  { icon: '♧', label: 'Bạn bè', path: 'friends' },
+  { label: 'Góc học tập', path: 'dashboard' },
+  { label: 'Lịch học', path: 'schedule' },
+  { label: 'Trợ lý học tập', path: 'assistant' },
+  { label: 'Phòng tập trung', path: 'pomodoro' },
+  { label: 'Lộ trình học', path: 'roadmap' },
+  { label: 'Mục tiêu', path: 'goals' },
+  { label: 'Tiến bộ của bạn', path: 'stats' },
+  { label: 'Bạn bè', path: 'friends' },
 ]
 
 export const utilityItems = [
-  { icon: '⚙', label: 'Cài đặt cá nhân', path: 'settings' },
-  { icon: '?', label: 'Trợ giúp & Phản hồi', path: 'help' },
+  { label: 'Cài đặt', path: 'settings' },
+  { label: 'Trợ giúp', path: 'help' },
 ]

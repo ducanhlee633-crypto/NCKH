@@ -146,5 +146,5 @@ export default function PomodoroPage({ onNavigate }) {
 }
 
 function PageHeading() {
-  return <div className="simple-heading"><div><p className="eyebrow">⏱️ NHỊP HỌC TẬP TRUNG</p><h1>Pomodoro & Focus</h1><p className="page-subtitle">Một khoảng tập trung nhỏ có thể tạo ra tiến bộ lớn.</p></div><div className="focus-tip">💡 Mẹo: Để điện thoại xa tầm tay</div></div>
+  return <div className="simple-heading"><div><p className="eyebrow">⏱️ NHỊP HỌC TẬP TRUNG</p><h1>Phòng tập trung</h1><p className="page-subtitle">Học 25 phút, nghỉ 5 phút. Tập trung vào một việc mỗi lần.</p></div><div className="focus-tip">💡 Mẹo: Để điện thoại xa tầm tay</div></div>
 }

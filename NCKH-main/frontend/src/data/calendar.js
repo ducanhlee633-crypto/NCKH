@@ -1,4 +1,13 @@
 export const minutes = value => { const [hour, minute] = value.split(':').map(Number); return hour * 60 + minute }
+export function calendarEvents(eventMap, roadmaps, deadlines) {
+ const calendar = Object.fromEntries(Object.entries(eventMap).map(([date, items]) => [date, [...items]]))
+ roadmaps.forEach(roadmap => roadmap.lessons.forEach(lesson => {
+  calendar[lesson.date] = [...(calendar[lesson.date] || []), { ...lesson, title: roadmap.subject + ': ' + lesson.title, subject: roadmap.subject, roadmap: true, tone: 'violet' }]
+ }))
+ deadlines.forEach(item => { calendar[item.date] = [...(calendar[item.date] || []), { ...item, deadline: true }] })
+ Object.values(calendar).forEach(items => items.sort((a, b) => a.start.localeCompare(b.start)))
+ return calendar
+}
 // Each connected group of overlapping events shares its available columns.
 export function layoutEvents(events) {
  const sorted = [...events].sort((a,b) => minutes(a.start)-minutes(b.start) || minutes(a.end)-minutes(b.end))

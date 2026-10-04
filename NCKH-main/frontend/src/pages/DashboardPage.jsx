@@ -1,73 +1,98 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Modal from '../components/Modal'
+import Icon from '../components/Icon'
 import useStoredState from '../data/useStoredState'
-import { CardHeader, EmptyState } from '../components/PageComponents'
+import { CardHeader, EmptyState, ProgressBar } from '../components/PageComponents'
+import { gradeLabel } from '../data/settings'
+import { calendarEvents } from '../data/calendar'
 
-const stats = [
-  { label: 'Chuỗi học', value: '0 ngày', icon: '🔥', tone: 'gold' },
-  { label: 'Tuần này', value: '0 / 5', icon: '🌱', tone: 'blue' },
-  { label: 'Trong 7 ngày', value: '0 hạn', icon: '☀️', tone: 'mint' },
-]
+const dateKey = date => date.toLocaleDateString('en-CA')
 
 export default function DashboardPage({ onNavigate }) {
   const [tasks, saveTasks, error] = useStoredState('nhip-hoc-tasks', [])
   const [deadlines, saveDeadlines, deadlineError] = useStoredState('nhip-hoc-deadlines', [])
   const [profile] = useStoredState('nhip-hoc-settings', {})
+  const [events] = useStoredState('nhip-hoc-events', {})
+  const [roadmaps] = useStoredState('nhip-hoc-roadmaps', [])
+  const [focus] = useStoredState('nhip-hoc-focus', {})
   const [showDeadline, setShowDeadline] = useState(false)
   const [title, setTitle] = useState('')
-  const [showModal, setShowModal] = useState(false)
-  const [modalTitle, setModalTitle] = useState('')
-  const [now] = useState(() => Date.now())
+  const [filter, setFilter] = useState('all')
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => { const timer = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(timer) }, [])
+  const today = dateKey(now)
   const completed = tasks.filter(task => task.done).length
-  const upcoming = deadlines.filter(item => { const due = new Date(item.date + 'T' + item.end); return due.getTime() >= now && due.getTime() <= now + 7 * 86400000 }).sort((a,b) => (a.date+a.end).localeCompare(b.date+b.end))
-  function addTask(value) { if (!value.trim()) return false; return saveTasks([...tasks, { id: crypto.randomUUID(), title: value.trim(), done: false }]) }
-  return (
-    <>
-      <section className="welcome-card dashboard-welcome">
-        <div className="spark spark-one">✦</div><div className="spark spark-two">✧</div>
-        <div className="welcome-top">
-          <div>
-            <p className="eyebrow">MỖI NGÀY MỘT CHÚT, MỖI NGÀY TIẾN BỘ ✨</p>
-            <h1>Chào {profile.nickname || profile.name || "bạn"}! <span>👋</span></h1>
-            <p className="welcome-subtitle">Mình cùng chọn một bước nhỏ để bắt đầu tuần này nhé.</p>
-          </div>
-          <div className="level-card"><div><span>CẤP 1</span><b>0 / 100 XP</b></div><div className="progress"><i style={{ width: '0%' }} /></div><small className="level-note">Tiến bộ nhỏ cũng đáng được ghi nhận</small></div>
-        </div>
-        <div className="welcome-stats">
-          {stats.map((stat) => <div className={'stat-pill ' + stat.tone} key={stat.label}><div><span>{stat.label}</span><b>{stat.tone === 'blue' ? completed + ' / ' + tasks.length : stat.tone === 'mint' ? upcoming.length + ' hạn' : stat.value}</b></div><i>{stat.icon}</i></div>)}
-        </div>
-      </section>
+  const remaining = tasks.length - completed
+  const nextTask = tasks.find(task => !task.done)
+  const upcoming = deadlines.filter(item => { const due = new Date(item.date + 'T' + item.end); return due >= now && due.getTime() <= now.getTime() + 7 * 86400000 }).sort((a, b) => (a.date + a.end).localeCompare(b.date + b.end))
+  const sessions = focus.date === today ? focus.sessions || 0 : 0
+  const week = Array.from({ length: 7 }, (_, index) => { const day = new Date(now); day.setDate(day.getDate() - (day.getDay() + 6) % 7 + index); return day })
+  const visibleTasks = tasks.filter(task => filter === 'all' || (filter === 'done' ? task.done : !task.done))
+  const calendar = calendarEvents(events, roadmaps, deadlines)
+  const lessonsToday = calendar[today] || []
+  const taskInput = () => document.getElementById('new-task')?.focus()
+  function addTask(event) {
+    event.preventDefault()
+    if (title.trim() && saveTasks([...tasks, { id: crypto.randomUUID(), title: title.trim(), done: false }])) { setTitle(''); setFilter('all') }
+  }
+  return <>
+    <section className="study-welcome">
+      <div><p className="eyebrow">{now.toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' })}</p><h1>Chào {profile.nickname || profile.name || 'bạn'}, hôm nay học gì?</h1><p className="page-subtitle">Một việc vừa sức. Một khoảng tập trung. Từng chút tiến bộ.</p></div>
+      <a className="ghost-button" href="#schedule"><Icon name="schedule" size={18} />Xem lịch học</a>
+    </section>
 
-      <div className="content-grid dashboard-focus-grid">
-        <div className="primary-column">
-          <section className="dashboard-card tasks-card weekly-focus" id="tasks">
-            <CardHeader icon="☷" title="Việc cần làm tuần này" tone="violet" action="Lịch" onAction={() => onNavigate('schedule')} />
-            <div className="focus-intro"><strong>Chọn 1 việc để bắt nhịp</strong><span>{completed} / {tasks.length} việc hoàn thành</span></div>
-            <div className="focus-progress"><i style={{ width: (tasks.length ? completed / tasks.length * 100 : 0) + '%' }} /></div>
-            {tasks.length ? <div className="task-list">{tasks.map(task => <div className="task-item" key={task.id}><label><input type="checkbox" checked={task.done} onChange={() => saveTasks(tasks.map(item => item.id === task.id ? {...item, done: !item.done} : item))} /><span style={{textDecoration: task.done ? 'line-through' : 'none'}}>{task.title}</span></label><button className="delete-button" aria-label={'Xóa ' + task.title} onClick={() => saveTasks(tasks.filter(item => item.id !== task.id))}>Xóa</button></div>)}</div> : <EmptyState icon="☷" title="Tuần mới còn nhiều khoảng trống cho bạn" tone="violet" button="Thêm việc đầu tiên" onAction={() => setShowModal(true)} />}
-            <form className="quick-add" onSubmit={e => { e.preventDefault(); if(addTask(title)) setTitle('') }}><input required maxLength={160} aria-label="Tên công việc" placeholder="Ví dụ: Ôn 10 từ vựng..." value={title} onChange={e => setTitle(e.target.value)} /><button>＋ Việc mới</button></form>{error && <p role="alert">{error}</p>}
-          </section>
-          <section className="dashboard-card deadline-card" id="deadlines">
-            <CardHeader icon="◉" title="Hạn chót trong 7 ngày" tone="orange" action="Thêm" onAction={() => setShowDeadline(true)} />
-            <span className="count-badge">{upcoming.length} hạn</span>{upcoming.length ? upcoming.map(item => <div className="deadline-item" key={item.id}><div><b>{item.title}</b><small>{item.date.split('-').reverse().join('/')} · {item.start}–{item.end}</small></div></div>) : <EmptyState icon="☀" title="Chưa có hạn chót nào trong tuần này" tone="orange" />}
-          </section>
-        </div>
-        <aside className="secondary-column">
-          <section className="dashboard-card streak-card" id="streaks">
-            <CardHeader icon="🔥" title="Chuỗi của bạn" tone="gold" />
-            <div className="streak-visual"><strong>0</strong><span>ngày liên tiếp</span></div>
-            <p className="streak-message">Bắt đầu bằng 10 phút hôm nay. Ngày mai, bạn sẽ cảm ơn mình.</p>
-            <button className="primary-button streak-action" onClick={() => onNavigate('schedule')}>Bắt đầu nhẹ nhàng</button>
-          </section>
-          <section className="dashboard-card rhythm-card">
-            <CardHeader icon="✦" title="Một lời nhắc nhỏ" tone="mint" />
-            <p className="rhythm-quote">“Không cần hoàn hảo. Chỉ cần tiếp tục theo nhịp của riêng bạn.”</p>
-            <button className="outline-button" onClick={() => onNavigate('roadmap')}>Xem lộ trình học</button>
-          </section>
-        </aside>
+    <section className="study-notebook" aria-labelledby="notebook-title">
+      <div className="notebook-copy">
+        <span className="notebook-tab"><Icon name="book" size={16} />Sổ học tập của bạn</span>
+        <p className="notebook-context">{gradeLabel(profile.grade)}</p>
+        <h2 id="notebook-title">Bắt đầu nhỏ,<br /> hiểu thêm mỗi ngày.</h2>
+        <p>{nextTask ? <>Việc tiếp theo: <strong>{nextTask.title}</strong></> : 'Ghi lại bài cần làm, rồi dành một khoảng thời gian riêng cho việc học.'}</p>
+        <button className="primary-button" onClick={() => nextTask ? onNavigate('pomodoro') : taskInput()}>{nextTask ? 'Vào phòng tập trung' : 'Thêm việc đầu tiên'}<Icon name="arrow" size={18} /></button>
       </div>
-      {showDeadline && <Modal title="Thêm hạn chót" onClose={() => setShowDeadline(false)}><form onSubmit={event => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget)); if (saveDeadlines([...deadlines, {...data, title: data.title.trim(), start: '00:00', tone: 'orange', id: crypto.randomUUID()}])) setShowDeadline(false) }}><label>Tên hạn chót<input name="title" required pattern=".*\S.*" maxLength={160} autoFocus /></label><label>Môn học<input name="subject" maxLength={80} /></label><label>Ngày<input name="date" type="date" required /></label><label>Hạn chót<input name="end" type="time" required defaultValue="23:59" /></label>{deadlineError && <p role="alert">{deadlineError}</p>}<div className="composer-actions"><button type="button" className="ghost-button" onClick={() => setShowDeadline(false)}>Hủy</button><button className="primary-button">Lưu hạn chót</button></div></form></Modal>}
-      {showModal && <Modal title="Thêm việc đầu tiên" onClose={() => setShowModal(false)}><form onSubmit={e => { e.preventDefault(); if(addTask(modalTitle)) { setModalTitle(''); setShowModal(false) } }}><label>Tên công việc<input autoFocus required maxLength={160} value={modalTitle} onChange={e => setModalTitle(e.target.value)} /></label>{error && <p role="alert">{error}</p>}<div className="composer-actions"><button type="button" className="ghost-button" onClick={() => setShowModal(false)}>Hủy</button><button className="primary-button">Thêm việc</button></div></form></Modal>}
-    </>
-  )
+      <div className="notebook-week">
+        <div className="notebook-week-heading"><b>Tuần của bạn</b><span>{week[0].getDate()}/{week[0].getMonth() + 1} – {week[6].getDate()}/{week[6].getMonth() + 1}</span></div>
+        <ol className="week-strip">{week.map((day, index) => {
+          const key = dateKey(day)
+          const count = (calendar[key] || []).length
+          return <li key={key} className={key === today ? 'is-today' : ''} aria-current={key === today ? 'date' : undefined}><span>{['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'][index]}</span><b>{day.getDate()}</b><span className={'day-dot ' + (count ? 'has-lessons' : '')} aria-label={count + ' lịch học'} /></li>
+        })}</ol>
+        <div className="notebook-week-foot"><span><i />Có lịch học</span><a href="#schedule">Sắp xếp tuần này <span aria-hidden="true">↗</span></a></div>
+        <div className="notebook-note"><Icon name="check" size={19} /><p>Lịch học ở trường, bài tập về nhà và thời gian nghỉ — đều có chỗ trong tuần của bạn.</p></div>
+      </div>
+    </section>
+
+    <div className="study-summary" aria-label="Tình hình học tập">
+      {[['goals', remaining, 'việc cần làm', 'violet'], ['schedule', upcoming.length, 'hạn nộp trong 7 ngày', 'gold'], ['pomodoro', sessions * 25, 'phút tập trung hôm nay', 'mint']].map(([icon, value, label, tone]) => <div className={'study-summary-item ' + tone} key={icon}><span className={'header-icon ' + tone}><Icon name={icon} /></span><div><b>{value}</b><span>{label}</span></div></div>)}
+    </div>
+
+    <div className="content-grid student-dashboard-grid">
+      <div className="primary-column">
+        <section className="dashboard-card student-tasks" id="tasks">
+          <CardHeader icon={<Icon name="check" />} title="Việc cần làm" tone="violet" />
+          <div className="task-progress-copy"><span>{completed} / {tasks.length} việc đã hoàn thành</span><b>{tasks.length ? Math.round(completed / tasks.length * 100) : 0}%</b></div>
+          <ProgressBar value={tasks.length ? completed / tasks.length * 100 : 0} tone="violet" />
+          <div className="task-filters" aria-label="Lọc việc cần làm">{[['all', 'Tất cả'], ['todo', 'Chưa xong'], ['done', 'Đã xong']].map(([value, label]) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}</div>
+          {visibleTasks.length ? <div className="task-list">{visibleTasks.map(task => <div className={'task-item ' + (task.done ? 'is-complete' : '')} key={task.id}><label><input type="checkbox" checked={task.done} onChange={() => saveTasks(tasks.map(item => item.id === task.id ? { ...item, done: !item.done } : item))} /><span>{task.title}</span></label><button className="delete-button" aria-label={'Xóa ' + task.title} onClick={() => saveTasks(tasks.filter(item => item.id !== task.id))}>Xóa</button></div>)}</div> : <EmptyState icon={<Icon name="book" size={26} />} title={tasks.length ? 'Chưa có việc nào trong mục này.' : 'Bắt đầu với một bài tập hoặc một phần cần ôn.'} tone="violet" />}
+          <form className="quick-add" onSubmit={addTask}><label className="sr-only" htmlFor="new-task">Việc cần làm</label><input id="new-task" required maxLength={160} placeholder="Ví dụ: Ôn 10 từ vựng tiếng Anh" value={title} onChange={event => setTitle(event.target.value)} /><button><Icon name="plus" size={17} />Thêm việc</button></form>
+          {error && <p role="alert">{error}</p>}
+        </section>
+        <section className="dashboard-card student-deadlines" id="deadlines">
+          <CardHeader icon={<Icon name="schedule" />} title="Sắp đến hạn nộp" tone="orange" action="Thêm hạn nộp" onAction={() => setShowDeadline(true)} />
+          {upcoming.length ? <div className="student-deadline-list">{upcoming.map(item => <div className="student-deadline" key={item.id}><time dateTime={item.date}><b>{Number(item.date.slice(8))}</b><span>Tháng {Number(item.date.slice(5, 7))}</span></time><div><b>{item.title}</b><small>{item.subject || 'Bài tập'} · {item.end}</small></div><span className="deadline-status">{item.date === today ? 'Hôm nay' : item.date.split('-').reverse().slice(0, 2).join('/')}</span></div>)}</div> : <EmptyState icon={<Icon name="check" size={24} />} title="Chưa có hạn nộp trong 7 ngày tới. Thêm bài tập để dễ theo dõi." tone="orange" />}
+        </section>
+      </div>
+      <aside className="secondary-column student-side">
+        <section className="dashboard-card today-card">
+          <CardHeader icon={<Icon name="schedule" />} title="Lịch hôm nay" tone="blue" />
+          {lessonsToday.length ? <ol className="today-lessons">{lessonsToday.map(item => <li key={item.id}><time>{item.deadline ? item.end : item.start}<small>{item.deadline ? 'Hạn nộp' : item.end}</small></time><div><b>{item.title}</b><span>{item.subject || 'Lịch học cá nhân'}</span></div></li>)}</ol> : <div className="today-empty"><Icon name="schedule" size={30} /><b>Hôm nay chưa có lịch học</b><p>Thêm tiết học hoặc buổi ôn tập để chủ động thời gian.</p></div>}
+          <a className="outline-button" href="#schedule">Mở lịch học <Icon name="arrow" size={16} /></a>
+        </section>
+        <section className="focus-invitation">
+          <span className="focus-invitation-icon"><Icon name="pomodoro" size={26} /></span><p className="eyebrow">DÀNH MỘT KHOẢNG CHO MÌNH</p><h2>25 phút, một việc thôi.</h2><p>Chọn bài cần học, tắt thông báo và bắt đầu. Hết phiên, nghỉ 5 phút nhé.</p><a className="primary-button" href="#pomodoro">Vào phòng tập trung<Icon name="arrow" size={17} /></a>
+        </section>
+        <a className="study-help-link" href="#help"><Icon name="help" size={18} /><span>Mới dùng Nhịp Học? Xem hướng dẫn</span><Icon name="arrow" size={16} /></a>
+      </aside>
+    </div>
+    {showDeadline && <Modal title="Thêm hạn nộp" onClose={() => setShowDeadline(false)}><form onSubmit={event => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget)); if (saveDeadlines([...deadlines, { ...data, title: data.title.trim(), start: '00:00', tone: 'orange', id: crypto.randomUUID() }])) setShowDeadline(false) }}><label>Tên bài tập<input name="title" required pattern=".*\S.*" maxLength={160} placeholder="Ví dụ: Nộp bài thuyết trình Ngữ văn" autoFocus /></label><label>Môn học<input name="subject" maxLength={80} placeholder="Ví dụ: Ngữ văn" /></label><label>Ngày nộp<input name="date" type="date" required /></label><label>Giờ nộp<input name="end" type="time" required defaultValue="23:59" /></label>{deadlineError && <p role="alert">{deadlineError}</p>}<div className="composer-actions"><button type="button" className="ghost-button" onClick={() => setShowDeadline(false)}>Hủy</button><button className="primary-button">Lưu hạn nộp</button></div></form></Modal>}
+  </>
 }
