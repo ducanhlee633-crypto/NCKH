@@ -17,3 +17,35 @@
 .scope-switch{display:flex;gap:6px;margin:4px 0 6px}
 .scope-switch button{flex:1;padding:9px 8px;border:1px solid #ccd8e8;border-radius:12px;background:#fff;font-size:12px;font-weight:800;color:#5b6b84;cursor:pointer}
 .scope-switch button.active{color:#fff;background:hsl(var(--accent-hue,216) 70% 50%);border-color:hsl(var(--accent-hue,216) 70% 50%)}
+.link-button{padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.link-button:hover{text-decoration:underline}
+/* Deadline mới: dải trên đầu ngày, không phải block giờ học */
+.day-deadlines{display:flex;flex-direction:column;gap:4px;margin:6px 0;padding:6px;border:1px dashed #f0b429;border-radius:10px;background:#fff8e7}
+.day-deadlines-title{font-size:10px;font-weight:900;letter-spacing:.5px;color:#9a6810}
+.deadline-strip-item{display:flex;align-items:center;gap:4px;padding:3px 4px;border-radius:8px;background:#fff;border:1px solid #f6dfa6}
+.deadline-strip-main{flex:1;display:flex;align-items:center;gap:5px;min-width:0;padding:0;border:0;background:none;cursor:pointer;text-align:left;font-size:11px;color:#3f4d67}
+.deadline-strip-main b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.deadline-strip-main span{flex-shrink:0;color:#9a6810;font-size:10px;font-weight:800}
+.deadline-strip-remove{flex-shrink:0;width:20px;height:20px;border:0;border-radius:50%;background:transparent;color:#d05e48;font-size:14px;font-weight:900;cursor:pointer}
+.deadline-strip-remove:hover{background:#fff0ed}
+.priority-dot{flex-shrink:0;width:8px;height:8px;border-radius:50%;background:#9aa7bd}
+.priority-dot.priority-high,.deadline-strip-item.priority-high .priority-dot{background:#d64545}
+.deadline-strip-item.priority-high{border-color:#f3b0b0;background:#fff1f1}
+.deadline-strip-item.priority-medium .priority-dot{background:#e79b1e}
+.deadline-strip-item.priority-low .priority-dot{background:#2f9e6e}
+.deadline-item .priority-dot{width:10px;height:10px}
+.deadline-item .priority-high{background:#d64545}
+.timeline-deadline-row,.timeline-deadline-row{display:grid;grid-template-columns:58px repeat(var(--days),minmax(0,1fr));gap:0;border-bottom:1px solid #e3eaf4;background:#fffdf4}
+.timeline-deadline-row>span:first-child{display:block}
+.timeline-deadline-cell{padding:6px;border-left:1px solid #e3eaf4}
+.timeline-deadline-cell .day-deadlines{margin:0}
+.month-cell .day-deadlines{margin:4px 2px 6px}
+.composer-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+/* Nút tick hoàn thành deadline (status boolean) */
+.deadline-toggle{flex-shrink:0;display:grid;place-items:center;width:20px;height:20px;padding:0;border:1.5px solid #c9b37e;border-radius:50%;background:#fff;color:#fff;font-size:12px;font-weight:900;cursor:pointer}
+.deadline-toggle:hover{border-color:#9a6810}
+.deadline-toggle[aria-pressed="true"]{background:#2f9e6e;border-color:#2f9e6e}
+.deadline-strip-item.is-done,.deadline-item.is-done{opacity:.65}
+.deadline-strip-item.is-done .deadline-strip-main b,.deadline-item.is-done .link-button{text-decoration:line-through}
+.check-row{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:14px}
+.check-row input{width:16px;height:16px;accent-color:#2f9e6e}

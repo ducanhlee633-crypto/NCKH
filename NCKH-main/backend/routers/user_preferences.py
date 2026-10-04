@@ -12,7 +12,7 @@ router = APIRouter(prefix="/preferences", tags=["preferences"])
 
 PREFERENCES_TABLE = "user_preferences"
 PREFERENCES_COLUMNS = (
-    "id,avatar,theme,color,ranking,streak,reminders,"
+    "id,user_id,avatar,theme,color,ranking,streak,reminders,"
     "reminder_minutes,weekly_hours,sound,created_at,updated_at"
 )
 
@@ -53,8 +53,13 @@ def _fetch_row(user_id: UUID) -> dict | None:
     return result.data[0] if result.data else None
 
 
-def _to_preferences(row: dict | None) -> UserPreferences:
+def _to_preferences(row: dict | None, user_id: UUID | None = None) -> UserPreferences:
     data = {**DEFAULTS, **(row or {})}
+    # DB cũ chưa có cột user_id -> fallback sang cột id (vốn là FK tới auth.users).
+    # DB mới có cả hai -> ưu tiên user_id.
+    resolved = (row or {}).get("user_id") or (row or {}).get("id") or (str(user_id) if user_id else None)
+    if resolved is not None:
+        data["user_id"] = resolved
     # DB có thể trả None cho avatar -> giữ None (frontend map sang '').
     return UserPreferences.model_validate(data)
 
@@ -64,7 +69,7 @@ def read_own_preferences(
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> UserPreferences:
     """Đọc lựa chọn Settings của chính mình. Chưa có dòng nào -> trả defaults."""
-    return _to_preferences(_fetch_row(current.id))
+    return _to_preferences(_fetch_row(current.id), current.id)
 
 
 @router.put("/me", response_model=UserPreferences, response_model_by_alias=True)
@@ -82,7 +87,7 @@ def upsert_own_preferences(
     try:
         if existing:
             if not values:
-                return _to_preferences(existing)
+                return _to_preferences(existing, current.id)
             result = (
                 get_supabase_admin()
                 .table(PREFERENCES_TABLE)
@@ -93,8 +98,8 @@ def upsert_own_preferences(
             )
             if not result.data:
                 raise HTTPException(status_code=404, detail="Preferences not found")
-            return _to_preferences(result.data[0])
-        merged = {**DEFAULTS, **values, "id": str(current.id)}
+            return _to_preferences(result.data[0], current.id)
+        merged = {**DEFAULTS, **values, "id": str(current.id), "user_id": str(current.id)}
         result = (
             get_supabase_admin()
             .table(PREFERENCES_TABLE)
@@ -104,7 +109,7 @@ def upsert_own_preferences(
         )
         if not result.data:
             raise HTTPException(status_code=503, detail="Database operation failed")
-        return _to_preferences(result.data[0])
+        return _to_preferences(result.data[0], current.id)
     except HTTPException:
         raise
     except Exception as error:

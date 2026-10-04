@@ -180,6 +180,44 @@ create trigger user_preferences_updated_at
 before update on public.user_preferences
 for each row execute function public.set_profile_updated_at();
 
+-- ---------------------------------------------------------------------
+-- 6b. Migration: thêm cột user_id (FK tới auth.users) cho user_preferences.
+--     DB cũ chỉ có cột `id` (vừa PK vừa FK 1-1). DB mới có thêm `user_id`
+--     để đồng nhất với schedule_blocks/deadlines (id riêng + user_id FK).
+--     Chạy an toàn nhiều lần: ADD COLUMN IF NOT EXISTS + backfill + unique.
+-- ---------------------------------------------------------------------
+alter table public.user_preferences
+  add column if not exists user_id uuid references auth.users (id) on delete cascade;
+
+-- Backfill cho các dòng cũ: user_id = id.
+update public.user_preferences
+set user_id = id
+where user_id is null;
+
+-- Quan hệ 1-1: mỗi user chỉ có 1 dòng preferences.
+create unique index if not exists user_preferences_user_id_uidx
+  on public.user_preferences (user_id);
+
+create index if not exists user_preferences_user_id_idx
+  on public.user_preferences (user_id);
+
+-- Tự đồng bộ user_id = id khi insert/update thiếu user_id
+-- (backend mới luôn gửi cả hai; trigger này giữ tương thích backend cũ).
+create or replace function public.sync_user_preferences_user_id()
+returns trigger language plpgsql as $$
+begin
+  if new.user_id is null then
+    new.user_id := new.id;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists user_preferences_sync_user_id on public.user_preferences;
+create trigger user_preferences_sync_user_id
+before insert or update on public.user_preferences
+for each row execute function public.sync_user_preferences_user_id();
+
 alter table public.user_preferences enable row level security;
 
 drop policy if exists "user_preferences_select_own" on public.user_preferences;
@@ -281,5 +319,69 @@ create policy "schedule_blocks_update_own"
 drop policy if exists "schedule_blocks_delete_own" on public.schedule_blocks;
 create policy "schedule_blocks_delete_own"
   on public.schedule_blocks for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------
+-- 8. Bảng deadlines: hạn nộp bài của SchedulePage (1-n với auth.users).
+--    Mỗi deadline 1 dòng đơn giản, không lặp lại:
+--      title    : tên deadline (1..160 ký tự)
+--      due_date : ngày nộp (date)
+--      due_time : giờ nộp (time, mặc định 23:59)
+--      priority : high | medium | low
+--      status   : boolean, false = chưa xong, true = đã hoàn thành
+-- ---------------------------------------------------------------------
+create table if not exists public.deadlines (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null,
+  due_date date not null,
+  due_time time not null default '23:59',
+  priority text not null default 'medium',
+  status boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint deadlines_title_length check (char_length(title) between 1 and 160),
+  constraint deadlines_priority_check check (priority in ('high', 'medium', 'low'))
+);
+
+-- Migration cho DB đã có bảng deadlines nhưng chưa có cột status.
+alter table public.deadlines add column if not exists status boolean not null default false;
+
+create index if not exists deadlines_user_id_idx
+  on public.deadlines (user_id);
+
+create index if not exists deadlines_user_due_date_idx
+  on public.deadlines (user_id, due_date);
+
+drop trigger if exists deadlines_updated_at on public.deadlines;
+create trigger deadlines_updated_at
+before update on public.deadlines
+for each row execute function public.set_profile_updated_at();
+
+alter table public.deadlines enable row level security;
+
+drop policy if exists "deadlines_select_own" on public.deadlines;
+create policy "deadlines_select_own"
+  on public.deadlines for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "deadlines_insert_own" on public.deadlines;
+create policy "deadlines_insert_own"
+  on public.deadlines for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "deadlines_update_own" on public.deadlines;
+create policy "deadlines_update_own"
+  on public.deadlines for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "deadlines_delete_own" on public.deadlines;
+create policy "deadlines_delete_own"
+  on public.deadlines for delete
   to authenticated
   using (auth.uid() = user_id);

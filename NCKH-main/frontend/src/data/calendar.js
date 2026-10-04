@@ -1,11 +1,17 @@
 export const minutes = value => { const [hour, minute] = value.split(':').map(Number); return hour * 60 + minute }
-export function calendarEvents(eventMap, roadmaps, deadlines) {
+export function calendarEvents(eventMap, roadmaps, deadlines = []) {
  const calendar = Object.fromEntries(Object.entries(eventMap).map(([date, items]) => [date, [...items]]))
  roadmaps.forEach(roadmap => roadmap.lessons.forEach(lesson => {
   calendar[lesson.date] = [...(calendar[lesson.date] || []), { ...lesson, title: roadmap.subject + ': ' + lesson.title, subject: roadmap.subject, roadmap: true, tone: 'violet' }]
  }))
- deadlines.forEach(item => { calendar[item.date] = [...(calendar[item.date] || []), { ...item, deadline: true }] })
- Object.values(calendar).forEach(items => items.sort((a, b) => a.start.localeCompare(b.start)))
+ deadlines.forEach(item => {
+  const day = item?.date || item?.due_date
+  if (!day) return
+  // Tương thích cả deadline cũ (start/end) và mới (time/due_time + priority).
+  const time = String(item.time || item.due_time || item.end || item.start || '23:59').slice(0, 5)
+  calendar[day] = [...(calendar[day] || []), { ...item, date: day, start: item.start || '00:00', end: time, time, deadline: true }]
+ })
+ Object.values(calendar).forEach(items => items.sort((a, b) => (a.start || '00:00').localeCompare(b.start || '00:00')))
  return calendar
 }
 // Each connected group of overlapping events shares its available columns.

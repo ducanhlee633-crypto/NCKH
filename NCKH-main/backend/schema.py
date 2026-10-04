@@ -2,7 +2,7 @@ from datetime import date as va_date
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class SignupRequest(BaseModel):
@@ -70,6 +70,13 @@ class UserPreferences(BaseModel):
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
+    # FK 1-1 tới auth.users.id. DB cũ chỉ có cột `id` (vừa PK vừa FK),
+    # DB mới có thêm cột `user_id` — nhận cả hai khi validate, trả ra `user_id`.
+    user_id: UUID | None = Field(
+        default=None,
+        validation_alias=AliasChoices("user_id", "id"),
+        serialization_alias="user_id",
+    )
     avatar: str | None = Field(default=None, max_length=3_000_000)
     theme: str = Field(default="light", pattern=r"^(light|dark)$")
     color: str = Field(default="blue", pattern=r"^(blue|violet|gold|mint)$")
@@ -172,5 +179,54 @@ class ScheduleBlock(BaseModel):
     repeat_days: list[int] = Field(default_factory=list)
     repeat_until: va_date | None = None
     exdates: list[va_date] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+# ---------------- Deadlines (SchedulePage.jsx) ----------------
+# CRUD đơn giản cho hạn nộp bài: tên + ngày nộp + giờ nộp + mức độ + trạng thái.
+# Không lặp lại, không tách chuỗi như schedule_blocks. Mỗi deadline 1 dòng.
+
+PRIORITY_VALUES = ("high", "medium", "low")
+
+
+class DeadlineBase(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str = Field(min_length=1, max_length=160)
+    due_date: va_date
+    due_time: str = Field(default="23:59", pattern=TIME_PATTERN)
+    priority: str = Field(default="medium", pattern=r"^(high|medium|low)$")
+    status: bool = False
+
+
+class DeadlineCreate(DeadlineBase):
+    pass
+
+
+class DeadlineUpdate(BaseModel):
+    """PUT/PATCH /deadlines/{id} — tất cả optional, chỉ cập nhật field được gửi."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+    due_date: va_date | None = None
+    due_time: str | None = Field(default=None, pattern=TIME_PATTERN)
+    priority: str | None = Field(default=None, pattern=r"^(high|medium|low)$")
+    status: bool | None = None
+
+
+class Deadline(BaseModel):
+    """Một hạn nộp bài của chính mình."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    title: str
+    due_date: va_date
+    due_time: str
+    priority: str = "medium"
+    status: bool = False
     created_at: datetime
     updated_at: datetime
