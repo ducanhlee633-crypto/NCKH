@@ -1,24 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { CardHeader, PageIntro, SectionCard } from '../components/PageComponents'
 import Modal from '../components/Modal'
 import useStoredState from '../data/useStoredState'
+import useScheduleBlocks from '../data/useScheduleBlocks'
 import { defaultSubjects } from '../data/subjects'
 import { calendarEvents, layoutEvents, minutes } from '../data/calendar'
-import { createScheduleBlock, deleteScheduleBlock, fetchScheduleBlocks, getSession, onSessionChange, updateScheduleBlock } from '../backendApi'
-import { defaultRepeatUntil, draftToCreatePayload, expandRepeatDates, groupLocalForMigration, keyOf, parseKey, repeatOptions, repeatSummary, serverRowsToEventMap, shortDateLabel, weekdayOptions } from '../data/scheduleRepeat'
+import { createScheduleBlock, deleteScheduleBlock, updateScheduleBlock } from '../backendApi'
+import { defaultRepeatUntil, draftToCreatePayload, expandRepeatDates, keyOf, parseKey, repeatOptions, repeatSummary, shortDateLabel, weekdayOptions } from '../data/scheduleRepeat'
 const dayNames = ['T2','T3','T4','T5','T6','T7','CN']
 const palette = ['mint','pink','cyan','yellow','orange','blue']
 const viewOptions = [['day','Ngày'],['week','Tuần'],['month','Tháng'],['year','Năm']]
-const MIGRATED_KEY = 'nhip-hoc-schedule-migrated'
 const startOfWeek = date => { const copy=new Date(date);copy.setDate(copy.getDate()-(copy.getDay()+6)%7);copy.setHours(0,0,0,0);return copy }
 const fullDateLabel = date => date.toLocaleDateString('vi-VN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})
-const readLocalMap = () => { try { return JSON.parse(localStorage.getItem('nhip-hoc-events')) ?? {} } catch { return {} } }
 function EventPill({event,onRemove,onOpen}) { const repeated=Boolean(event.repeatId && event.repeat && event.repeat!=='none'); return <div className={'event-pill '+event.tone+(onOpen?' clickable':'')} role={onOpen?'button':undefined} tabIndex={onOpen?0:undefined} title={event.title+' '+event.start+'–'+event.end+(repeated?' • '+repeatSummary(event):'')} onClick={onOpen?event=>{event.stopPropagation();onOpen()}:undefined} onKeyDown={onOpen?event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onOpen()}}:undefined}>{event.deadline ? '⚑ ' : ''}<b>{repeated ? '🔁 ' : ''}{event.title}</b><span>{event.start}–{event.end}</span>{onRemove && <button className="event-remove" aria-label={'Xóa '+event.title} onClick={event=>{event.stopPropagation();onRemove()}}>×</button>}</div> }
 export default function SchedulePage() {
  const [roadmaps] = useStoredState('nhip-hoc-roadmaps', [])
  const [view,setView]=useState('month')
  const [anchor,setAnchor]=useState(() => new Date())
- const [localEventMap,setLocalEventMap,localError]=useStoredState('nhip-hoc-events',{})
  const [deadlines,setDeadlines,deadlineError]=useStoredState('nhip-hoc-deadlines',[])
  const [composer,setComposer]=useState(false)
  const [deadlineMode,setDeadlineMode]=useState(false)
@@ -28,41 +26,9 @@ export default function SchedulePage() {
  const [editing,setEditing]=useState(null)
  const [draft,setDraft]=useState({title:'',date:keyOf(anchor),start:'14:00',end:'15:30',tone:'blue',repeat:'none',repeatDays:[],repeatUntil:''})
  const [error,setError]=useState('')
- // --- Đồng bộ server (Supabase): đã đăng nhập -> server là nguồn sự thật,
- // chưa đăng nhập -> giữ localStorage như cũ.
- const [session,setSession]=useState(() => getSession())
- const loggedIn=!!session
- const [serverRows,setServerRows]=useState(null)
- const [syncError,setSyncError]=useState('')
- const loadingSchedule=loggedIn && serverRows===null
- useEffect(() => onSessionChange(next => {
-  setSession(next)
-  if(!next){ setServerRows(null); setSyncError('') }
- }), [])
- useEffect(() => {
-  if(!loggedIn) return
-  let mounted=true
-  fetchScheduleBlocks()
-   .then(async rows => {
-    if(!mounted) return
-    setSyncError('')
-    // Migrate 1 lần duy nhất: đẩy lịch local cũ lên server khi server còn trống.
-    if(rows.length===0 && !localStorage.getItem(MIGRATED_KEY)) {
-     const payloads=groupLocalForMigration(readLocalMap())
-     if(payloads.length) {
-      try { for(const payload of payloads){ const created=await createScheduleBlock(payload); rows=[...rows,created] } }
-      catch { if(mounted) setSyncError('Không đẩy được lịch cũ lên server. Lịch mới vẫn sẽ lưu online.') }
-     }
-     try { localStorage.setItem(MIGRATED_KEY,'1') } catch { /* bỏ qua */ }
-    }
-    if(mounted) setServerRows(rows)
-   })
-   .catch(() => { if(mounted){setSyncError('Không tải được lịch từ server. Kiểm tra backend và đăng nhập lại.');setServerRows([])} })
-
-  return () => { mounted=false }
- },[loggedIn])
- const serverEventMap=useMemo(() => (loggedIn && serverRows ? serverRowsToEventMap(serverRows) : null),[loggedIn,serverRows])
- const eventMap=serverEventMap ?? localEventMap
+ // Nguồn sự thật duy nhất: đã đăng nhập -> server, chưa đăng nhập -> local.
+ // Hook đã chặn fallback local lúc loading để không flash ghost (block đã xóa).
+ const { loggedIn, loadingSchedule, serverRows, setServerRows, localEventMap, setLocalEventMap, localError, eventMap, syncError, setSyncError } = useScheduleBlocks()
  const calendarMap=calendarEvents(eventMap, roadmaps, deadlines)
  const sortedDeadlines=[...deadlines].sort((a,b)=>(a.date+a.end).localeCompare(b.date+b.end))
  const upcoming=sortedDeadlines.filter(item=>new Date(item.date+'T'+item.end)>=new Date())
@@ -82,6 +48,23 @@ export default function SchedulePage() {
  }
  function move(amount) { const next=new Date(anchor); if(view==='day')next.setDate(next.getDate()+amount);else if(view==='week')next.setDate(next.getDate()+amount*7);else if(view==='month'){next.setDate(1);next.setMonth(next.getMonth()+amount)}else{next.setDate(1);next.setFullYear(next.getFullYear()+amount)}setAnchor(next) }
  function directRemove(date,id) { if(deadlines.some(item=>item.id===id))setDeadlines(deadlines.filter(item=>item.id!==id));else setLocalEventMap({...localEventMap,[date]:(localEventMap[date]||[]).filter(item=>item.id!==id)}) }
+ // Dọn xác local trùng tên+giờ sau khi đã xóa trên server (id local khác id
+ // server do migrate tạo id mới). Để logout cũng không thấy ghost quay lại.
+ function scrubLocalGhost(target, singleDateOnly) {
+  if(!target || !loggedIn) return
+  let changed=false
+  const next={}
+  Object.entries(localEventMap).forEach(([date,items])=>{
+   const kept=(items||[]).filter(item=>{
+    if(item.title!==target.title || item.start!==target.start || item.end!==target.end) return true
+    if(singleDateOnly) return date!==target.date
+    return false
+   })
+   if(kept.length!==(items||[]).length) changed=true
+   if(kept.length) next[date]=kept
+  })
+  if(changed) setLocalEventMap(next)
+ }
  function findEvent(date,eventOrId) {
   const id=typeof eventOrId==='object'&&eventOrId!==null?eventOrId.id:eventOrId
   if(typeof eventOrId==='object'&&eventOrId!==null&&eventOrId.id) return eventOrId
@@ -90,11 +73,14 @@ export default function SchedulePage() {
  async function requestRemove(date,eventOrId) {
   const target=findEvent(date,eventOrId)
   if(!target||target.roadmap) { const id=typeof eventOrId==='object'&&eventOrId!==null?eventOrId.id:eventOrId; if(id) directRemove(date,id); return }
-  // Bản ghi trên server (có serverId): xóa qua API.
+  // Bản ghi trên server (có serverId): xóa qua API, cập nhật lạc quan cho biến mất ngay.
   if(target.serverId && loggedIn && serverRows) {
    if(!target.repeatId) {
-    try { await deleteScheduleBlock(target.serverId); setServerRows(rows=>rows.filter(row=>row.id!==target.serverId)) }
-    catch(failure){ setSyncError(failure.friendlyMessage || 'Không xóa được buổi học trên server.') }
+    const snapshot=serverRows
+    setServerRows(rows=>rows.filter(row=>row.id!==target.serverId))
+    scrubLocalGhost(target, true)
+    try { await deleteScheduleBlock(target.serverId) }
+    catch(failure){ setServerRows(snapshot); setSyncError(failure.friendlyMessage || 'Không xóa được buổi học trên server.') }
     return
    }
    setPendingDelete({date,event:target,server:true}); return
@@ -103,24 +89,31 @@ export default function SchedulePage() {
   setPendingDelete({date,event:target,server:false})
  }
  function removeEvent(date,eventOrId) { requestRemove(date,eventOrId) }
- async function removeSingle() {
+  async function removeSingle() {
   if(!pendingDelete) return
   if(pendingDelete.server) {
+   const target=pendingDelete.event
+   const snapshot=serverRows
+   setServerRows(rows=>rows.map(row=>row.id===target.serverId?{...row,exdates:[...(row.exdates||[]),target.date]}:row));setPendingDelete(null)
+   scrubLocalGhost(target, true)
    try {
-    const updated=await deleteScheduleBlock(pendingDelete.event.serverId,{scope:'single',day:pendingDelete.event.date})
-    setServerRows(rows=>rows.map(row=>row.id===updated.id?updated:row));setPendingDelete(null)
-   } catch(failure){ setSyncError(failure.friendlyMessage || 'Không xóa được buổi học trên server.') }
+    const updated=await deleteScheduleBlock(target.serverId,{scope:'single',day:target.date})
+    setServerRows(rows=>rows.map(row=>row.id===updated.id?updated:row))
+   } catch(failure){ setServerRows(snapshot); setSyncError(failure.friendlyMessage || 'Không xóa được buổi học trên server.') }
    return
   }
   directRemove(pendingDelete.date,pendingDelete.event.id);setPendingDelete(null)
  }
- async function removeSeries() {
+  async function removeSeries() {
   if(!pendingDelete) return
   if(pendingDelete.server) {
-   try {
-    await deleteScheduleBlock(pendingDelete.event.serverId)
-    setServerRows(rows=>rows.filter(row=>row.id!==pendingDelete.event.serverId));setPendingDelete(null)
-   } catch(failure){ setSyncError(failure.friendlyMessage || 'Không xóa được chuỗi trên server.') }
+   const target=pendingDelete.event
+   const seriesId=target.serverId
+   const snapshot=serverRows
+   setServerRows(rows=>rows.filter(row=>row.id!==seriesId));setPendingDelete(null)
+   scrubLocalGhost(target, false)
+   try { await deleteScheduleBlock(seriesId) }
+   catch(failure){ setServerRows(snapshot); setSyncError(failure.friendlyMessage || 'Không xóa được chuỗi trên server.') }
    return
   }
   const rid=pendingDelete.event.repeatId
@@ -146,13 +139,22 @@ export default function SchedulePage() {
    if(until<draft.date){setError('Ngày kết thúc lặp lại phải sau ngày bắt đầu.');return}
   }
   // Đã đăng nhập: lưu lên server (Supabase), server tự điền 31/12 nếu thiếu.
+  // Thêm dòng tạm cho hiện ngay, xong mới thay bằng dòng thật từ server.
   if(loggedIn) {
    if(!serverRows){setError('Đang tải lịch từ server, thử lại sau giây lát.');return}
+   const payload=draftToCreatePayload(draft)
+   const tempId='temp-'+Date.now()
+   const optimisticRow={id:tempId,subject:null,kind:'study',repeat_days:[],exdates:[],...payload}
+   if(!optimisticRow.repeat_until) optimisticRow.repeat_until=payload.repeat!=='none'?defaultRepeatUntil(payload.date):null
+   setServerRows(rows=>[...(rows||[]),optimisticRow])
+   setSyncError('');setAnchor(new Date(draft.date+'T00:00:00'));setComposer(false)
    try {
-    const created=await createScheduleBlock(draftToCreatePayload(draft))
-    setServerRows(rows=>[...(rows||[]),created])
-    setSyncError('');setAnchor(new Date(draft.date+'T00:00:00'));setComposer(false)
-   } catch(failure){ setError(failure.friendlyMessage || 'Không lưu được buổi học lên server.') }
+    const created=await createScheduleBlock(payload)
+    setServerRows(rows=>(rows||[]).map(row=>row.id===tempId?created:row))
+   } catch(failure){
+    setServerRows(rows=>(rows||[]).filter(row=>row.id!==tempId))
+    setSyncError(failure.friendlyMessage || 'Không lưu được buổi học lên server. Đã hoàn tác.')
+   }
    return
   }
   const untilRaw=repeat==='none' ? null : (draft.repeatUntil||defaultRepeatUntil(draft.date))
@@ -206,10 +208,11 @@ export default function SchedulePage() {
   <div className="summary-grid schedule-stats"><div className="summary-chip blue"><span>TỔNG BUỔI</span><b>{sessions.length}</b></div><div className="summary-chip mint"><span>TỔNG GIỜ</span><b>{totalHours.toFixed(1)}</b></div><div className="summary-chip gold"><span>DEADLINE</span><b>{upcoming.length} sắp tới / {deadlines.length} hạn</b></div></div>
   {syncStatus && <p className="repeat-hint" role="status">{syncStatus}</p>}
   <SectionCard className="calendar-card"><div className="calendar-toolbar"><div className="calendar-nav"><button className="today-button" onClick={()=>setAnchor(new Date())}>Hôm nay</button><button className="round-button" aria-label="Lùi thời gian" onClick={()=>move(-1)}>‹</button><button className="round-button" aria-label="Tiến thời gian" onClick={()=>move(1)}>›</button><strong>{visibleTitle}</strong></div><div className="view-switcher" role="tablist">{viewOptions.map(([value,label])=><button key={value} role="tab" aria-selected={view===value} className={view===value?'active':''} onClick={()=>setView(value)}>{label}</button>)}</div></div>
+  {loadingSchedule ? <p className="repeat-hint" role="status">Đang đồng bộ lịch với server…</p> : <>
   {view==='month' && <MonthView anchor={anchor} eventMap={calendarMap} onSelect={setSelectedDate} onOpen={openDetail} />}
   {view==='week' && <WeekView anchor={anchor} eventMap={calendarMap} onAdd={openComposer} onRemove={removeEvent} onOpen={openDetail} />}
   {view==='day' && <DayView anchor={anchor} eventMap={calendarMap} onAdd={openComposer} onRemove={removeEvent} onOpen={openDetail} />}
-  {view==='year' && <YearView anchor={anchor} eventMap={calendarMap} onSelect={date=>{setAnchor(date);setView('month')}} />}</SectionCard>
+  {view==='year' && <YearView anchor={anchor} eventMap={calendarMap} onSelect={date=>{setAnchor(date);setView('month')}} />}</>}</SectionCard>
   <div className="schedule-bottom"><SectionCard className="deadline-card"><CardHeader icon="⚑" title="Hạn nộp bài" tone="orange" action="Thêm" onAction={()=>openComposer(anchor,'14:00',true)} /><p>{upcoming.length} hạn sắp tới / {deadlines.length} hạn tổng cộng</p><DeadlineList items={sortedDeadlines} onRemove={removeEvent} /></SectionCard></div>
   {(localError || deadlineError) && <p role="alert">{localError || deadlineError}</p>}
   {selectedDate && <Modal title={fullDateLabel(selectedDate)} onClose={()=>setSelectedDate(null)}><DayView anchor={selectedDate} eventMap={calendarMap} onAdd={(date,hour)=>{setSelectedDate(null);openComposer(date,hour)}} onRemove={removeEvent} onOpen={openDetail} /><button className="primary-button" onClick={()=>{setSelectedDate(null);openComposer(selectedDate)}}>＋ Thêm lịch</button></Modal>}

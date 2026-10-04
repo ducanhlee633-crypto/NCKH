@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Modal from '../components/Modal'
 import Icon from '../components/Icon'
 import useStoredState from '../data/useStoredState'
+import useScheduleBlocks from '../data/useScheduleBlocks'
 import { CardHeader, EmptyState, ProgressBar } from '../components/PageComponents'
 import { displayUser, getSession, onSessionChange } from '../backendApi'
 import { gradeLabel } from '../data/settings'
@@ -15,7 +16,9 @@ export default function DashboardPage({ onNavigate }) {
   const [profile] = useStoredState('nhip-hoc-settings', {})
   const [accountName, setAccountName] = useState(() => displayUser(getSession())?.name || 'bạn')
   useEffect(() => onSessionChange((session) => setAccountName(displayUser(session)?.name || 'bạn')), [])
-  const [events] = useStoredState('nhip-hoc-events', {})
+  // Cùng nguồn sự thật với SchedulePage: login -> server, chưa login -> local.
+  // Sửa lỗi dashboard báo sai (hiện block IELTS đã xóa) do trước đây chỉ đọc local.
+  const { eventMap: events, loadingSchedule } = useScheduleBlocks()
   const [roadmaps] = useStoredState('nhip-hoc-roadmaps', [])
   const [focus] = useStoredState('nhip-hoc-focus', {})
   const [showDeadline, setShowDeadline] = useState(false)
@@ -87,7 +90,7 @@ export default function DashboardPage({ onNavigate }) {
       <aside className="secondary-column student-side">
         <section className="dashboard-card today-card">
           <CardHeader icon={<Icon name="schedule" />} title="Lịch hôm nay" tone="blue" />
-          {lessonsToday.length ? <ol className="today-lessons">{lessonsToday.map(item => <li key={item.id}><time>{item.deadline ? item.end : item.start}<small>{item.deadline ? 'Hạn nộp' : item.end}</small></time><div><b>{item.title}</b><span>{item.subject || 'Lịch học cá nhân'}</span></div></li>)}</ol> : <div className="today-empty"><Icon name="schedule" size={30} /><b>Hôm nay chưa có lịch học</b><p>Thêm tiết học hoặc buổi ôn tập để chủ động thời gian.</p></div>}
+          {loadingSchedule ? <div className="today-empty"><b>Đang đồng bộ lịch…</b></div> : lessonsToday.length ? <ol className="today-lessons">{lessonsToday.map(item => <li key={item.id}><time>{item.deadline ? item.end : item.start}<small>{item.deadline ? 'Hạn nộp' : item.end}</small></time><div><b>{item.title}</b><span>{item.subject || 'Lịch học cá nhân'}</span></div></li>)}</ol> : <div className="today-empty"><Icon name="schedule" size={30} /><b>Hôm nay chưa có lịch học</b><p>Thêm tiết học hoặc buổi ôn tập để chủ động thời gian.</p></div>}
           <a className="outline-button" href="#schedule">Mở lịch học <Icon name="arrow" size={16} /></a>
         </section>
         <section className="focus-invitation">
