@@ -231,4 +231,47 @@ export async function savePreferences(settings) {
   }
 }
 
+/** Block học (schedule_blocks): CRUD cho SchedulePage. Chỉ gọi khi đã đăng nhập. */
+
+export async function fetchScheduleBlocks(from, to) {
+  const params = new URLSearchParams()
+  if (from) params.set('from', from)
+  if (to) params.set('to', to)
+  const query = params.toString()
+  const { data } = await api.get('/api/schedule' + (query ? `?${query}` : ''))
+  return Array.isArray(data) ? data : []
+}
+
+export async function createScheduleBlock(payload) {
+  try {
+    const { data } = await api.post('/api/schedule', payload)
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: failure.response?.data?.detail || 'Không lưu được buổi học lên server. Vui lòng thử lại.' }
+  }
+}
+
+export async function updateScheduleBlock(id, payload, { scope = 'series', day } = {}) {
+  const params = new URLSearchParams({ scope })
+  if (day) params.set('day', day)
+  try {
+    const { data } = await api.put(`/api/schedule/${id}?${params}`, payload)
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: failure.response?.data?.detail || 'Không sửa được buổi học trên server. Vui lòng thử lại.' }
+  }
+}
+
+/** Xóa block. scope=series -> 204 (trả null); scope=single -> 200 + chuỗi đã cập nhật. */
+export async function deleteScheduleBlock(id, { scope = 'series', day } = {}) {
+  const params = new URLSearchParams({ scope })
+  if (day) params.set('day', day)
+  try {
+    const { data, status } = await api.delete(`/api/schedule/${id}?${params}`)
+    return status === 204 ? null : data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: failure.response?.data?.detail || 'Không xóa được buổi học trên server. Vui lòng thử lại.' }
+  }
+}
+
 export default api

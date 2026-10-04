@@ -238,5 +238,194 @@ class SupabaseAuthRoutesTest(unittest.TestCase):
         self.assertEqual(client.get(f"/api/users/{uuid4()}").status_code, 404)
 
 
+class FakeScheduleTable:
+    """Giả lập query supabase-py cho bảng schedule_blocks (hỗ trợ nhiều .eq nối tiếp)."""
+
+    def __init__(self, store: dict):
+        self.store = store
+        self._op = None
+        self._values = None
+        self._filters: list = []
+
+    def select(self, *args):
+        if self._op is None:
+            self._op = "select"
+        return self
+
+    def insert(self, values):
+        self._op = "insert"
+        self._values = dict(values)
+        return self
+
+    def update(self, values):
+        self._op = "update"
+        self._values = dict(values)
+        return self
+
+    def delete(self):
+        self._op = "delete"
+        return self
+
+    def eq(self, column, value):
+        self._filters.append((column, str(value)))
+        return self
+
+    def limit(self, *args):
+        return self
+
+    def _match(self, row: dict) -> bool:
+        return all(str(row.get(column)) == value for column, value in self._filters)
+
+    def execute(self):
+        if self._op == "insert":
+            row = {
+                "id": str(uuid4()),
+                "repeat_days": [],
+                "exdates": [],
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
+            }
+            row.update(self._values)
+            self.store[row["id"]] = row
+            return SimpleNamespace(data=[row])
+        if self._op == "update":
+            matched = [row for row in self.store.values() if self._match(row)]
+            for row in matched:
+                row.update(self._values)
+            return SimpleNamespace(data=matched)
+        if self._op == "delete":
+            matched = [row for row in self.store.values() if self._match(row)]
+            for row in matched:
+                self.store.pop(row["id"], None)
+            return SimpleNamespace(data=matched)
+        return SimpleNamespace(data=[row for row in self.store.values() if self._match(row)])
+
+
+class ScheduleBlocksTest(unittest.TestCase):
+    def setUp(self):
+        self.store: dict = {}
+        self.user_id = uuid4()
+        admin = MagicMock()
+        admin.table.side_effect = lambda name: FakeScheduleTable(self.store)
+        self._patches = [
+            patch("routers.schedule.get_supabase_admin", return_value=admin),
+            patch("auth._verify_locally", return_value=self.user_id),
+        ]
+        for entered in self._patches:
+            entered.start()
+        self.client = TestClient(app)
+        self.headers = {"Authorization": "Bearer test-token"}
+
+    def tearDown(self):
+        for entered in self._patches:
+            entered.stop()
+
+    def test_requires_auth(self):
+        self.assertEqual(self.client.get("/api/schedule").status_code, 401)
+
+    def test_full_crud_with_repeat_series(self):
+        # Tạo block lẻ.
+        single = self.client.post(
+            "/api/schedule",
+            json={"title": "Toán", "subject": "Toán", "date": "2026-10-05",
+                  "start_time": "14:00", "end_time": "15:30"},
+            headers=self.headers,
+        )
+        self.assertEqual(single.status_code, 201, single.text)
+        self.assertIsNone(single.json()["repeat_until"])
+        single_id = single.json()["id"]
+
+        # Tạo chuỗi hằng tuần, không gửi repeat_until -> mặc định 31/12.
+        series = self.client.post(
+            "/api/schedule",
+            json={"title": "Tiếng Anh", "date": "2026-10-05",
+                  "start_time": "08:00", "end_time": "09:00", "repeat": "weekly"},
+            headers=self.headers,
+        )
+        self.assertEqual(series.status_code, 201, series.text)
+        self.assertEqual(series.json()["repeat_until"], "2026-12-31")
+        series_id = series.json()["id"]
+
+        # Validate lỗi.
+        bad_time = self.client.post(
+            "/api/schedule",
+            json={"title": "X", "date": "2026-10-05", "start_time": "15:00", "end_time": "14:00"},
+            headers=self.headers,
+        )
+        self.assertEqual(bad_time.status_code, 422)
+        bad_custom = self.client.post(
+            "/api/schedule",
+            json={"title": "X", "date": "2026-10-05", "start_time": "14:00",
+                  "end_time": "15:00", "repeat": "custom"},
+            headers=self.headers,
+        )
+        self.assertEqual(bad_custom.status_code, 422)
+        bad_year = self.client.post(
+            "/api/schedule",
+            json={"title": "X", "date": "2026-10-05", "start_time": "14:00",
+                  "end_time": "15:00", "repeat": "daily", "repeat_until": "2027-01-01"},
+            headers=self.headers,
+        )
+        self.assertEqual(bad_year.status_code, 422)
+
+        # Lọc theo khoảng: tháng 11 chỉ còn chuỗi weekly (block lẻ tháng 10 bị loại).
+        november = self.client.get(
+            "/api/schedule?from=2026-11-01&to=2026-11-30", headers=self.headers
+        )
+        self.assertEqual(november.status_code, 200)
+        self.assertEqual([row["id"] for row in november.json()], [series_id])
+
+        # Không đọc được block của user khác.
+        other_id = str(uuid4())
+        self.store[other_id] = {
+            "id": other_id, "user_id": "00000000-0000-0000-0000-000000000000",
+            "title": "Riêng tư", "subject": None, "date": "2026-10-06",
+            "start_time": "10:00", "end_time": "11:00", "tone": "blue", "kind": "study",
+            "repeat": "none", "repeat_days": [], "repeat_until": None, "exdates": [],
+            "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+        }
+        self.assertEqual(
+            self.client.get(f"/api/schedule/{other_id}", headers=self.headers).status_code, 404
+        )
+
+        # Sửa cả chuỗi.
+        renamed = self.client.put(
+            f"/api/schedule/{series_id}", json={"title": "Tiếng Anh (mới)"}, headers=self.headers
+        )
+        self.assertEqual(renamed.status_code, 200)
+        self.assertEqual(renamed.json()["title"], "Tiếng Anh (mới)")
+
+        # Sửa 1 buổi lẻ: tách thành block mới, chuỗi gốc thêm exdates.
+        split = self.client.put(
+            f"/api/schedule/{series_id}?scope=single&day=2026-10-12",
+            json={"start_time": "09:00", "end_time": "10:00"},
+            headers=self.headers,
+        )
+        self.assertEqual(split.status_code, 200, split.text)
+        child = split.json()
+        self.assertEqual(child["repeat"], "none")
+        self.assertEqual(child["date"], "2026-10-12")
+        parent = self.client.get(f"/api/schedule/{series_id}", headers=self.headers).json()
+        self.assertIn("2026-10-12", parent["exdates"])
+
+        # Xóa 1 buổi lẻ khác trong chuỗi.
+        removed_one = self.client.delete(
+            f"/api/schedule/{series_id}?scope=single&day=2026-10-19", headers=self.headers
+        )
+        self.assertEqual(removed_one.status_code, 200, removed_one.text)
+        self.assertIn("2026-10-19", removed_one.json()["exdates"])
+
+        # Xóa cả chuỗi + xóa block lẻ.
+        self.assertEqual(
+            self.client.delete(f"/api/schedule/{series_id}", headers=self.headers).status_code, 204
+        )
+        self.assertEqual(
+            self.client.get(f"/api/schedule/{series_id}", headers=self.headers).status_code, 404
+        )
+        self.assertEqual(
+            self.client.delete(f"/api/schedule/{single_id}", headers=self.headers).status_code, 204
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

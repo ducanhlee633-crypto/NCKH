@@ -2,13 +2,17 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import api, {
   clearSession,
+  createScheduleBlock,
+  deleteScheduleBlock,
   displayUser,
+  fetchScheduleBlocks,
   getSession,
   loginUser,
   logoutUser,
   registerUser,
   requestPasswordReset,
   changePassword,
+  updateScheduleBlock,
   SESSION_KEY,
 } from './backendApi.js'
 
@@ -114,4 +118,53 @@ test('lỗi backend được gắn friendlyMessage tiếng Việt', async () => 
     assert.equal(failure.friendlyMessage, 'Email hoặc mật khẩu không đúng.')
     return true
   })
+})
+
+test('schedule CRUD gọi đúng endpoint, xóa series 204 trả null', async () => {
+  const requests = []
+  const row = {
+    id: 'block-1', user_id: 'user-1', title: 'Toán', subject: null,
+    date: '2026-10-05', start_time: '14:00', end_time: '15:30',
+    tone: 'blue', kind: 'study', repeat: 'weekly', repeat_days: [],
+    repeat_until: '2026-12-31', exdates: [],
+  }
+  api.defaults.adapter = async config => {
+    requests.push(config)
+    if (config.url.startsWith('/api/schedule') && config.method === 'get') return { data: [row], status: 200, headers: {}, config }
+    if (config.url === '/api/schedule' && config.method === 'post') return { data: row, status: 201, headers: {}, config }
+    if (config.url.startsWith('/api/schedule/block-1') && config.method === 'delete') {
+      if (config.url.includes('scope=single')) return { data: { ...row, exdates: ['2026-10-12'] }, status: 200, headers: {}, config }
+      return { data: null, status: 204, headers: {}, config }
+    }
+    return { data: {}, status: 200, headers: {}, config }
+  }
+  const rows = await fetchScheduleBlocks('2026-10-01', '2026-10-31')
+  assert.equal(requests[0].url, '/api/schedule?from=2026-10-01&to=2026-10-31')
+  assert.equal(rows[0].repeat_until, '2026-12-31')
+  const created = await createScheduleBlock({ title: 'Toán', date: '2026-10-05', start_time: '14:00', end_time: '15:30' })
+  assert.equal(created.id, 'block-1')
+  const afterSingle = await deleteScheduleBlock('block-1', { scope: 'single', day: '2026-10-12' })
+  assert.deepEqual(afterSingle.exdates, ['2026-10-12'])
+  assert.equal(await deleteScheduleBlock('block-1'), null)
+})
+
+test('tạo block lỗi validate backend trả friendlyMessage từ detail', async () => {
+  api.defaults.adapter = async () => { throw { response: { status: 422, data: { detail: 'Giờ kết thúc phải sau giờ bắt đầu trong cùng ngày.' } } } }
+  await assert.rejects(createScheduleBlock({ title: 'X' }), (failure) => {
+    assert.equal(failure.friendlyMessage, 'Giờ kết thúc phải sau giờ bắt đầu trong cùng ngày.')
+    return true
+  })
+})
+
+test('sửa block (PATCH) gửi đúng scope và query day', async () => {
+  const requests = []
+  api.defaults.adapter = async config => {
+    requests.push(config)
+    return { data: { id: 'block-9' }, status: 200, headers: {}, config }
+  }
+  await updateScheduleBlock('block-9', { title: 'Mới' })
+  assert.equal(requests[0].url, '/api/schedule/block-9?scope=series')
+  await updateScheduleBlock('block-9', { title: 'Lẻ' }, { scope: 'single', day: '2026-10-12' })
+  assert.equal(requests[1].url, '/api/schedule/block-9?scope=single&day=2026-10-12')
+  assert.equal(requests[1].method, 'put')
 })

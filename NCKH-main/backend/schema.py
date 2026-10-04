@@ -1,3 +1,4 @@
+from datetime import date as va_date
 from datetime import datetime
 from uuid import UUID
 
@@ -105,3 +106,71 @@ class Token(BaseModel):
     expires_in: int | None = None
     user: SessionUser
     profile: UserPrivate | None = None
+
+
+# ---------------- Schedule blocks (SchedulePage.jsx) ----------------
+# Lưu 1 dòng cho mỗi chuỗi lặp lại (kiểu Google Calendar): rule repeat nằm
+# gọn trong repeat / repeat_days / repeat_until, frontend expand ra các ngày
+# khi hiển thị. Xóa/sửa 1 buổi lẻ trong chuỗi dùng exdates + scope=single.
+
+REPEAT_VALUES = ("none", "daily", "weekly", "weekdays", "weekends", "custom", "monthly")
+
+TIME_PATTERN = r"^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$"
+
+
+class ScheduleBlockBase(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str = Field(min_length=1, max_length=160)
+    subject: str | None = Field(default=None, max_length=80)
+    date: va_date
+    start_time: str = Field(pattern=TIME_PATTERN)
+    end_time: str = Field(pattern=TIME_PATTERN)
+    tone: str = Field(default="blue", max_length=20)
+    kind: str = Field(default="study", pattern=r"^(study|deadline)$")
+    repeat: str = Field(default="none", pattern=r"^(none|daily|weekly|weekdays|weekends|custom|monthly)$")
+    repeat_days: list[int] = Field(default_factory=list)
+    repeat_until: va_date | None = None
+
+
+class ScheduleBlockCreate(ScheduleBlockBase):
+    pass
+
+
+class ScheduleBlockUpdate(BaseModel):
+    """PUT /schedule/{id} — tất cả optional, chỉ cập nhật field được gửi."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+    subject: str | None = Field(default=None, max_length=80)
+    date: va_date | None = None
+    start_time: str | None = Field(default=None, pattern=TIME_PATTERN)
+    end_time: str | None = Field(default=None, pattern=TIME_PATTERN)
+    tone: str | None = Field(default=None, max_length=20)
+    kind: str | None = Field(default=None, pattern=r"^(study|deadline)$")
+    repeat: str | None = Field(default=None, pattern=r"^(none|daily|weekly|weekdays|weekends|custom|monthly)$")
+    repeat_days: list[int] | None = None
+    repeat_until: va_date | None = None
+
+
+class ScheduleBlock(BaseModel):
+    """Một block học (hoặc một chuỗi lặp lại) của chính mình."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    title: str
+    subject: str | None = None
+    date: va_date
+    start_time: str
+    end_time: str
+    tone: str = "blue"
+    kind: str = "study"
+    repeat: str = "none"
+    repeat_days: list[int] = Field(default_factory=list)
+    repeat_until: va_date | None = None
+    exdates: list[va_date] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime

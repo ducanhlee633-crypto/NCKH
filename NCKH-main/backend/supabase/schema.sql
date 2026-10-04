@@ -206,3 +206,80 @@ create policy "user_preferences_delete_own"
   on public.user_preferences for delete
   to authenticated
   using (auth.uid() = id);
+
+-- ---------------------------------------------------------------------
+-- 7. Bảng schedule_blocks: block học của SchedulePage (1-1..n với auth.users).
+--    Mỗi chuỗi lặp lại lưu gọn 1 dòng (kiểu Google Calendar):
+--      repeat       : none | daily | weekly | weekdays | weekends | custom | monthly
+--      repeat_days  : mảng 0 (CN)..6 (T7), chỉ dùng khi repeat = 'custom'
+--      repeat_until : ngày kết thúc, mặc định 31/12 của năm chứa ngày bắt đầu
+--      exdates      : các buổi lẻ đã bị xóa/tách khỏi chuỗi (scope=single)
+-- ---------------------------------------------------------------------
+create table if not exists public.schedule_blocks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null,
+  subject text,
+  date date not null,
+  start_time time not null,
+  end_time time not null,
+  tone text not null default 'blue',
+  kind text not null default 'study',
+  repeat text not null default 'none',
+  repeat_days integer[] not null default '{}',
+  repeat_until date,
+  exdates date[] not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint schedule_blocks_title_length check (char_length(title) between 1 and 160),
+  constraint schedule_blocks_time_check check (end_time > start_time),
+  constraint schedule_blocks_repeat_check check (repeat in ('none', 'daily', 'weekly', 'weekdays', 'weekends', 'custom', 'monthly')),
+  constraint schedule_blocks_kind_check check (kind in ('study', 'deadline')),
+  constraint schedule_blocks_repeat_until_check check (
+    (repeat = 'none' and repeat_until is null)
+    or (repeat <> 'none' and repeat_until is not null and repeat_until >= date)
+  ),
+  -- Chuỗi lặp lại chỉ chạy trong năm của ngày bắt đầu (hết năm = 31/12).
+  constraint schedule_blocks_repeat_within_year_check check (
+    repeat_until is null
+    or repeat_until <= make_date(extract(year from date)::int, 12, 31)
+  )
+);
+
+create index if not exists schedule_blocks_user_id_idx
+  on public.schedule_blocks (user_id);
+
+create index if not exists schedule_blocks_user_date_idx
+  on public.schedule_blocks (user_id, date);
+
+drop trigger if exists schedule_blocks_updated_at on public.schedule_blocks;
+create trigger schedule_blocks_updated_at
+before update on public.schedule_blocks
+for each row execute function public.set_profile_updated_at();
+
+alter table public.schedule_blocks enable row level security;
+
+drop policy if exists "schedule_blocks_select_own" on public.schedule_blocks;
+create policy "schedule_blocks_select_own"
+  on public.schedule_blocks for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "schedule_blocks_insert_own" on public.schedule_blocks;
+create policy "schedule_blocks_insert_own"
+  on public.schedule_blocks for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "schedule_blocks_update_own" on public.schedule_blocks;
+create policy "schedule_blocks_update_own"
+  on public.schedule_blocks for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "schedule_blocks_delete_own" on public.schedule_blocks;
+create policy "schedule_blocks_delete_own"
+  on public.schedule_blocks for delete
+  to authenticated
+  using (auth.uid() = user_id);
