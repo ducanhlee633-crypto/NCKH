@@ -14,7 +14,12 @@ function NavLink({ item, active, onNavigate }) {
 export default function Sidebar({ currentPage, onNavigate }) {
   const [profile] = useStoredState('nhip-hoc-settings', defaultSettings)
   const [accountName, setAccountName] = useState(() => displayUser(getSession())?.name || '')
-  useEffect(() => onSessionChange((session) => setAccountName(displayUser(session)?.name || '')), [])
+  // Lớp ưu tiên từ profile server khi đã đăng nhập, fallback settings local.
+  const [serverGrade, setServerGrade] = useState(() => getSession()?.profile?.grade || '')
+  useEffect(() => onSessionChange((session) => {
+    setAccountName(displayUser(session)?.name || '')
+    setServerGrade(session?.profile?.grade || '')
+  }), [])
   return <aside className="sidebar">
     <div>
       <a className="brand" href="#dashboard" aria-label="Nhịp Học — Góc học tập">
@@ -32,7 +37,7 @@ export default function Sidebar({ currentPage, onNavigate }) {
       <div className="sidebar-note"><Icon name="book" /><p>Không cần học thật nhiều.<br /><b>Hãy bắt đầu từ một việc nhỏ.</b></p></div>
       <button className="sidebar-profile" onClick={() => onNavigate('settings')} aria-label="Chỉnh sửa hồ sơ học tập">
         <div className="avatar">{profile.avatar ? <img src={profile.avatar} alt="" /> : (accountName || 'Bạn').slice(0, 2)}</div>
-        <div className="sidebar-profile-copy"><b>{accountName || 'Hồ sơ của bạn'}</b><small>{gradeLabel(profile.grade)}</small></div>
+        <div className="sidebar-profile-copy"><b>{accountName || 'Hồ sơ của bạn'}</b><small>{gradeLabel(serverGrade || profile.grade)}</small></div>
         <Icon name="settings" size={18} />
       </button>
     </div>

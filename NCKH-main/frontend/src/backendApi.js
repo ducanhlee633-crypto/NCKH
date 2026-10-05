@@ -1,4 +1,10 @@
 import axios from 'axios'
+import { safeMaterialUrl, validateAiPlan } from './data/roadmap.js'
+import { POMODORO_SUBJECTS } from './data/subjects.js'
+
+// Danh mục môn học dùng chung nằm ở ./data/subjects.js (mirror backend/subjects.py).
+// Re-export để PomodoroPage (và code cũ import từ backendApi) không phải sửa.
+export { POMODORO_SUBJECTS }
 
 // Mô hình backend-proxy: mọi key Supabase (URL, ANON_KEY, SERVICE_ROLE_KEY)
 // chỉ nằm ở backend. Frontend chỉ gọi API của mình và giữ session token
@@ -37,6 +43,7 @@ export function displayUser(session) {
     name: profile?.nickname || profile?.name || profile?.username || (user.email ? user.email.split('@')[0] : 'Bạn'),
     nickname: profile?.nickname ?? null,
     username: profile?.username ?? null,
+    grade: profile?.grade ?? null,
   }
 }
 
@@ -114,14 +121,16 @@ function backendErrorMessage(failure, fallback) {
 }
 
 /** Đăng ký qua backend (backend gọi Supabase Auth). Có thể trả { needsEmailConfirmation }. */
-export async function registerUser({ email, password, name, username, nickname }) {
+export async function registerUser({ email, password, name, username, nickname, grade }) {
   try {
+    const normalizedGrade = normalizeGrade(grade)
     const { data } = await api.post('/api/auth/signup', {
       email: email.trim(),
       password,
       name: name?.trim() || '',
       ...(username?.trim() ? { username: username.trim() } : {}),
       ...(nickname?.trim() ? { nickname: nickname.trim() } : {}),
+      ...(normalizedGrade ? { grade: normalizedGrade } : {}),
     })
     // Project bật "Confirm email": Supabase không trả session, backend trả 201 kèm detail.
     if (!data?.access_token) return { needsEmailConfirmation: true, email: email.trim() }
@@ -172,11 +181,25 @@ export async function fetchProfile() {
   return data
 }
 
-export async function syncProfile({ username, name, nickname }) {
+const GRADE_VALUES = ['6', '7', '8', '9', '10', '11', '12']
+const normalizeGrade = value => {
+  if (value === null || value === undefined) return null
+  const cleaned = String(value).trim()
+  if (!cleaned) return null
+  return GRADE_VALUES.includes(cleaned) ? cleaned : undefined
+}
+
+export async function syncProfile({ username, name, nickname, grade }) {
+  const normalizedGrade = normalizeGrade(grade)
+  if (grade !== undefined && normalizedGrade === undefined) {
+    throw { friendlyMessage: 'Lớp không hợp lệ. Chọn từ 6 đến 12.' }
+  }
   const { data } = await api.patch('/api/users/me', {
     ...(username ? { username: username.trim().toLowerCase() } : {}),
     ...(nickname ? { nickname: nickname.trim().toLowerCase() } : {}),
     ...(name ? { name: name.trim() } : {}),
+    // grade: gửi string "6".."12" để đặt, null để xóa, bỏ qua khi undefined/""
+    ...(normalizedGrade ? { grade: normalizedGrade } : grade === null || grade === '' ? { grade: null } : {}),
   })
   updateSessionProfile(data)
   return data
@@ -187,7 +210,10 @@ export async function deleteAccount() {
   clearSession()
 }
 
-/** Lựa chọn Settings (user_preferences): 9 field hiển thị/học tập, không gồm identity. */
+/** Lựa chọn Settings (user_preferences): 10 field hiển thị/học tập/AI, không gồm identity. */
+
+const AI_TONE_VALUES = ['cute', 'honest', 'funny', 'empathetic']
+const normalizeAiTone = value => (AI_TONE_VALUES.includes(String(value)) ? String(value) : 'cute')
 
 export function preferencesFromServer(data = {}) {
   return {
@@ -200,6 +226,7 @@ export function preferencesFromServer(data = {}) {
     reminderMinutes: Number(data.reminderMinutes ?? data.reminder_minutes ?? 15),
     weeklyHours: Number(data.weeklyHours ?? data.weekly_hours ?? 24),
     sound: data.sound ?? true,
+    aiTone: normalizeAiTone(data.aiTone ?? data.ai_tone ?? 'cute'),
   }
 }
 
@@ -214,6 +241,7 @@ export function preferencesToPayload(settings = {}) {
     reminderMinutes: Number(settings.reminderMinutes ?? 15),
     weeklyHours: Number(settings.weeklyHours ?? 24),
     sound: !!settings.sound,
+    aiTone: normalizeAiTone(settings.aiTone ?? settings.ai_tone ?? 'cute'),
   }
 }
 
@@ -484,8 +512,7 @@ export async function deleteFeedback(id) {
 
 /** Pomodoro (pomodoro_sessions): ghi phiên focus đã hoàn thành. Chỉ gọi khi đã đăng nhập. */
 
-/** Môn học khóa cứng cho phiên focus — khớp backend + CHECK trong Supabase. */
-export const POMODORO_SUBJECTS = ['Toán', 'Lí', 'Hoá', 'Văn', 'Sinh', 'Sử', 'Địa', 'Tin', 'Dự án']
+/** Môn học khóa cứng cho phiên focus — lấy từ ./data/subjects.js (khớp backend + CHECK trong Supabase). */
 
 function pomodoroErrorMessage(failure, fallback) {
   const detail = failure.response?.data?.detail
@@ -494,7 +521,7 @@ function pomodoroErrorMessage(failure, fallback) {
   return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
 }
 
-/** Chuẩn hóa payload POST /api/pomodoro: {focus_minutes, subject?, started_at, ended_at}. Subject chỉ gửi khi thuộc 9 môn khóa cứng. */
+/** Chuẩn hóa payload POST /api/pomodoro: {focus_minutes, subject?, started_at, ended_at}. Subject chỉ gửi khi thuộc danh mục khóa cứng. */
 export function pomodoroToPayload({ focusMinutes, focus_minutes, subject, startedAt, started_at, endedAt, ended_at } = {}) {
   const minutes = Number(focus_minutes ?? focusMinutes ?? 0)
   const toISO = value => (value instanceof Date ? value.toISOString() : String(value || ''))
@@ -554,6 +581,502 @@ export async function deletePomodoroSession(id) {
     return null
   } catch (failure) {
     throw { ...failure, friendlyMessage: pomodoroErrorMessage(failure, 'Không xóa được phiên tập trung.') }
+  }
+}
+
+/** Mục tiêu (goals): CRUD cho GoalsPage. Chỉ gọi khi đã đăng nhập. */
+
+export const GOAL_STATUS = ['in_progress', 'completed']
+export const GOAL_STATUS_LABEL = { in_progress: 'Đang thực hiện', completed: 'Đã hoàn thành' }
+
+function goalErrorMessage(failure, fallback) {
+  const detail = failure.response?.data?.detail
+  if (detail) return detail
+  if (failure.response?.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
+  return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
+}
+
+const normalizeGoalStatus = value => (value === 'completed' ? 'completed' : 'in_progress')
+const normalizeGoalProgress = value => {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return 0
+  return Math.max(0, Math.min(100, Math.round(num)))
+}
+const normalizeTargetScore = value => {
+  if (value === null || value === undefined || value === '') return null
+  const num = Number(value)
+  if (!Number.isFinite(num)) return null
+  return Math.max(0, Math.min(10, Math.round(num * 10) / 10))
+}
+
+/** Row server {id,title,target_score,icon,start_date,end_date,status,progress} -> item UI {id,title,targetScore,startDate,date,icon,status,progress}. */
+export function goalFromServer(row = {}) {
+  const completed = normalizeGoalStatus(row.status) === 'completed'
+  return {
+    id: row.id,
+    title: row.title || '',
+    targetScore: row.target_score ?? row.targetScore ?? null,
+    icon: row.icon || '🌱',
+    startDate: row.start_date || row.startDate || '',
+    // Giữ `date` để GoalsPage cũ vẫn đọc được (tương thích ngược: date = end_date).
+    date: row.end_date || row.date || '',
+    endDate: row.end_date || row.date || '',
+    status: normalizeGoalStatus(row.status),
+    progress: completed ? 100 : normalizeGoalProgress(row.progress),
+    ...(completed ? { completedAt: row.end_date || row.date || '' } : {}),
+  }
+}
+
+/** Item UI -> payload POST/PUT /api/goals. */
+export function goalToPayload(item = {}) {
+  const targetScore = normalizeTargetScore(item.targetScore ?? item.target_score)
+  const payload = {
+    title: String(item.title || '').trim(),
+    icon: String(item.icon || item.emoji || '🌱').slice(0, 16) || '🌱',
+    start_date: item.startDate || item.start_date,
+    end_date: item.date || item.endDate || item.end_date,
+    status: normalizeGoalStatus(item.status),
+    progress: normalizeGoalProgress(item.progress),
+  }
+  if (targetScore !== null) payload.target_score = targetScore
+  return payload
+}
+
+/** Gom goal local cũ thành payload để migrate 1 lần lên server. */
+export function goalsLocalForMigration(list = []) {
+  return (Array.isArray(list) ? list : [])
+    .filter(item => item && !item.serverId && typeof item.title === 'string' && item.title.trim())
+    .map(item => goalToPayload(item))
+    .filter(payload => payload.title && /^\d{4}-\d{2}-\d{2}$/.test(payload.start_date || '') && /^\d{4}-\d{2}-\d{2}$/.test(payload.end_date || ''))
+    .filter(payload => payload.start_date <= payload.end_date)
+}
+
+/** GET /api/goals?status=&from=&to= — mục tiêu của chính mình. */
+export async function fetchGoals({ status: goalStatus, from, to } = {}) {
+  const params = new URLSearchParams()
+  if (goalStatus) params.set('status', goalStatus)
+  if (from) params.set('from', from)
+  if (to) params.set('to', to)
+  const query = params.toString()
+  try {
+    const { data } = await api.get('/api/goals' + (query ? `?${query}` : ''))
+    return Array.isArray(data) ? data : []
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: goalErrorMessage(failure, 'Không tải được mục tiêu.') }
+  }
+}
+
+/** POST /api/goals — tạo mục tiêu mới. */
+export async function createGoal(payload) {
+  try {
+    const { data } = await api.post('/api/goals', goalToPayload(payload))
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: goalErrorMessage(failure, 'Không lưu được mục tiêu lên server. Vui lòng thử lại.') }
+  }
+}
+
+/** PUT /api/goals/{id} — sửa mục tiêu (đổi tên, ngày, trạng thái, tiến độ...). */
+export async function updateGoal(id, payload) {
+  try {
+    const { data } = await api.put(`/api/goals/${encodeURIComponent(String(id || ''))}`, goalToPayload(payload))
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: goalErrorMessage(failure, 'Không sửa được mục tiêu trên server. Vui lòng thử lại.') }
+  }
+}
+
+/** PATCH /api/goals/{id} — cập nhật 1 phần (VD: {status} hoặc {progress}). Dùng payload thô, không qua goalToPayload. */
+export async function patchGoal(id, payload) {
+  try {
+    const { data } = await api.patch(`/api/goals/${encodeURIComponent(String(id || ''))}`, payload)
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: goalErrorMessage(failure, 'Không cập nhật được mục tiêu trên server.') }
+  }
+}
+
+/** DELETE /api/goals/{id} — xóa mục tiêu (204). */
+export async function deleteGoal(id) {
+  try {
+    await api.delete(`/api/goals/${encodeURIComponent(String(id || ''))}`)
+    return null
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: goalErrorMessage(failure, 'Không xóa được mục tiêu trên server.') }
+  }
+}
+
+/** Lộ trình học (roadmaps + roadmap_stages + roadmap_lessons): CRUD cho RoadmapPage. Bắt buộc đăng nhập. */
+
+function roadmapErrorMessage(failure, fallback) {
+  const detail = failure.response?.data?.detail
+  if (detail) return typeof detail === 'string' ? detail : 'Thông tin lộ trình chưa hợp lệ. Kiểm tra lại các trường.'
+  if (failure.response?.status === 401) return 'Hãy đăng nhập để lưu lộ trình học.'
+  return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
+}
+
+const hhmmRoadmap = value => String(value || '').slice(0, 5)
+const normalizeRoadmapScore = value => {
+  if (value === null || value === undefined || value === '') return null
+  const num = Number(value)
+  if (!Number.isFinite(num)) return null
+  return Math.max(0, Math.min(10, Math.round(num * 10) / 10))
+}
+
+/** Row server RoadmapDetail -> item UI cho RoadmapPage (giữ shape cũ của localStorage để khỏi vỡ hiển thị). */
+export function roadmapFromServer(row = {}) {
+  const stages = (Array.isArray(row.stages) ? row.stages : []).map(stage => ({
+    title: String(stage?.title || ''),
+    goal: String(stage?.goal || ''),
+    materials: (Array.isArray(stage?.materials) ? stage.materials : [])
+      .filter(item => item?.url)
+      .map(item => ({ label: String(item.label || item.url), url: String(item.url) })),
+    checkpoint: String(stage?.checkpoint || ''),
+  }))
+  const lessons = (Array.isArray(row.lessons) ? row.lessons : []).map(lesson => ({
+    id: lesson?.id,
+    title: String(lesson?.title || ''),
+    focus: String(lesson?.focus || ''),
+    stage: Number.isInteger(lesson?.stage_index) ? lesson.stage_index : Number(lesson?.stage ?? 0) || 0,
+    date: lesson?.date || '',
+    start: hhmmRoadmap(lesson?.start_time ?? lesson?.start),
+    end: hhmmRoadmap(lesson?.end_time ?? lesson?.end),
+    done: !!lesson?.done,
+    materialUrl: String(lesson?.material_url ?? lesson?.materialUrl ?? ''),
+    materialLabel: String(lesson?.material_label ?? lesson?.materialLabel ?? lesson?.material_url ?? lesson?.materialUrl ?? ''),
+    stageId: lesson?.stage_id ?? null,
+  }))
+  return {
+    id: row.id,
+    title: String(row.title || ''),
+    goalId: row.goal_id || '',
+    subject: String(row.subject || ''),
+    startDate: row.start_date || '',
+    endDate: row.end_date || '',
+    time: hhmmRoadmap(row.start_time) || '19:00',
+    duration: Number(row.duration_minutes ?? row.duration ?? 60),
+    sessionsPerWeek: Number(row.sessions_per_week ?? row.sessionsPerWeek ?? 5),
+    studyDays: Array.isArray(row.study_days) ? row.study_days.filter(d => Number.isInteger(d) && d >= 0 && d <= 6) : Array.isArray(row.studyDays) ? row.studyDays : [0, 1, 2, 3, 4, 5, 6],
+    context: String(row.context || ''),
+    notes: String(row.notes || ''),
+    grade: row.grade ?? '',
+    level: String(row.level || ''),
+    currentScore: row.current_score ?? row.currentScore ?? '',
+    targetScore: row.target_score ?? row.targetScore ?? '',
+    weakTopics: String(row.weak_topics ?? row.weakTopics ?? ''),
+    learningStyle: String(row.learning_style ?? row.learningStyle ?? ''),
+    aiGenerated: !!(row.ai_generated ?? row.aiGenerated),
+    goalTitle: String(row.goalTitle || ''),
+    stages,
+    lessons,
+  }
+}
+
+/** Draft UI + stages/lessons đã dựng -> payload POST /api/roadmaps. */
+export function roadmapToPayload({ draft = {}, stages = [], lessons = [], aiGenerated = false } = {}) {
+  const trim = value => String(value ?? '').trim()
+  const grade = trim(draft.grade)
+  const currentScore = normalizeRoadmapScore(draft.currentScore)
+  const targetScore = normalizeRoadmapScore(draft.targetScore)
+  const studyDays = [...new Set((Array.isArray(draft.studyDays) ? draft.studyDays : []).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort()
+  return {
+    title: trim(draft.title),
+    subject: trim(draft.subject),
+    ...(draft.goalId ? { goal_id: draft.goalId } : {}),
+    start_date: draft.startDate,
+    end_date: draft.endDate,
+    start_time: hhmmRoadmap(draft.time) || '19:00',
+    duration_minutes: Number(draft.duration),
+    sessions_per_week: Number(draft.sessionsPerWeek),
+    study_days: studyDays,
+    context: trim(draft.context),
+    notes: trim(draft.notes),
+    ...(grade ? { grade } : { grade: null }),
+    level: trim(draft.level),
+    ...(currentScore !== null ? { current_score: currentScore } : {}),
+    ...(targetScore !== null ? { target_score: targetScore } : {}),
+    weak_topics: trim(draft.weakTopics),
+    learning_style: trim(draft.learningStyle),
+    ai_generated: !!aiGenerated,
+    stages: (Array.isArray(stages) ? stages : []).slice(0, 5).map(stage => ({
+      title: trim(stage.title),
+      goal: trim(stage.goal),
+      checkpoint: trim(stage.checkpoint),
+      materials: (Array.isArray(stage.materials) ? stage.materials : []).slice(0, 3)
+        .filter(item => item?.url)
+        .map(item => ({ label: trim(item.label || item.url).slice(0, 200) || String(item.url), url: String(item.url).trim() })),
+    })),
+    lessons: (Array.isArray(lessons) ? lessons : []).slice(0, 120).map((lesson, index) => ({
+      title: trim(lesson.title) || `Buổi ${index + 1}`,
+      focus: trim(lesson.focus),
+      stage_index: Math.max(0, Number(lesson.stage ?? lesson.stage_index ?? 0) || 0),
+      date: lesson.date,
+      start_time: hhmmRoadmap(lesson.start ?? lesson.start_time),
+      end_time: hhmmRoadmap(lesson.end ?? lesson.end_time),
+      material_url: String(lesson.materialUrl ?? lesson.material_url ?? '').trim(),
+      material_label: trim(lesson.materialLabel ?? lesson.material_label ?? '').slice(0, 200),
+    })),
+  }
+}
+
+/** GET /api/roadmaps — lộ trình của mình kèm stages + lessons (mới nhất trước). */
+export async function fetchRoadmaps() {
+  try {
+    const { data } = await api.get('/api/roadmaps')
+    return Array.isArray(data) ? data : []
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: roadmapErrorMessage(failure, 'Không tải được lộ trình học.') }
+  }
+}
+
+/** POST /api/roadmaps — tạo lộ trình kèm stages + lessons. Nhận payload thô từ roadmapToPayload. */
+export async function createRoadmap(payload) {
+  try {
+    const { data } = await api.post('/api/roadmaps', payload)
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: roadmapErrorMessage(failure, 'Không lưu được lộ trình lên server. Vui lòng thử lại.') }
+  }
+}
+
+/** PUT /api/roadmaps/{id} — sửa scalar; gửi kèm stages/lessons để thay toàn bộ nested. */
+export async function updateRoadmap(id, payload) {
+  try {
+    const { data } = await api.put(`/api/roadmaps/${encodeURIComponent(String(id || ''))}`, payload)
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: roadmapErrorMessage(failure, 'Không sửa được lộ trình trên server. Vui lòng thử lại.') }
+  }
+}
+
+/** DELETE /api/roadmaps/{id} — xóa lộ trình + stages/lessons (204). */
+export async function deleteRoadmap(id) {
+  try {
+    await api.delete(`/api/roadmaps/${encodeURIComponent(String(id || ''))}`)
+    return null
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: roadmapErrorMessage(failure, 'Không xóa được lộ trình trên server.') }
+  }
+}
+
+/** PATCH /api/roadmaps/lessons/{lessonId} — tick done hoặc sửa 1 buổi học. */
+export async function patchRoadmapLesson(lessonId, payload) {
+  try {
+    const { data } = await api.patch(`/api/roadmaps/lessons/${encodeURIComponent(String(lessonId || ''))}`, payload)
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: roadmapErrorMessage(failure, 'Không cập nhật được buổi học trên server.') }
+  }
+}
+
+/** Trợ lý AI (ai chat): POST /api/ai/chat {messages:[{role,content}]} -> {reply, model}. Chỉ gọi khi đã đăng nhập. */
+
+function aiErrorMessage(failure, fallback) {
+  const detail = failure.response?.data?.detail
+  if (detail) return detail
+  if (failure.response?.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại rồi chat.'
+  if (failure.response?.status === 503) return 'Dịch vụ AI chưa được cấu hình. Vui lòng liên hệ quản trị viên.'
+  if (failure.response?.status === 502) return 'AI đang bận. Vui lòng thử lại sau ít phút.'
+  return failure.response ? fallback : 'Không kết nối được máy chủ AI. Kiểm tra backend rồi thử lại.'
+}
+
+/** Chuẩn hóa message UI {role,text} hoặc {role,content} -> {role,content} cho backend. */
+export function aiMessagesToPayload(list = []) {
+  return (Array.isArray(list) ? list : [])
+    .map(item => ({
+      role: item?.role === 'assistant' ? 'assistant' : 'user',
+      content: String(item?.content ?? item?.text ?? '').trim(),
+    }))
+    .filter(item => item.content)
+    .slice(-20)
+}
+
+/** Gửi hội thoại lên backend, trả về chuỗi reply. Ném lỗi có friendlyMessage. */
+export async function sendAiChat(messages, { aiTone } = {}) {
+  const payload = aiMessagesToPayload(messages)
+  if (!payload.length) throw { friendlyMessage: 'Hãy nhập câu hỏi trước khi gửi.' }
+  // Ưu tiên aiTone truyền vào (bản Settings mới chỉnh nhưng chưa bấm Lưu);
+  // thiếu thì đọc localStorage để backend dùng đúng giọng đang xem.
+  let tone = ['cute', 'honest', 'funny', 'empathetic'].includes(aiTone) ? aiTone : null
+  if (!tone) {
+    try {
+      const stored = JSON.parse(localStorage.getItem('nhip-hoc-settings')) || {}
+      const raw = stored.aiTone ?? stored.ai_tone
+      if (['cute', 'honest', 'funny', 'empathetic'].includes(raw)) tone = raw
+    } catch { /* bỏ qua: backend tự đọc DB */ }
+  }
+  try {
+    const { data } = await api.post('/api/ai/chat', { messages: payload, ...(tone ? { aiTone: tone } : {}) }, { timeout: 60000 })
+    const reply = String(data?.reply ?? '').trim()
+    if (!reply) throw { response: { data: {} }, message: 'empty reply' }
+    return reply
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: aiErrorMessage(failure, 'Không nhận được câu trả lời từ AI. Vui lòng thử lại.') }
+  }
+}
+
+/** Generate a complete plan; cancellation belongs to the composer that requested it. */
+export async function generateRoadmapPlan(payload = {}, { signal } = {}) {
+  const total = Number(payload.totalSessions)
+  if (!String(payload.subject || '').trim() || !String(payload.context || '').trim() || !Number.isInteger(total) || total < 1 || total > 120) {
+    throw { friendlyMessage: 'Nhập môn học, ngữ cảnh và số buổi hợp lệ (1–120).' }
+  }
+  try {
+    const { data } = await api.post('/api/ai/roadmap', payload, { timeout: 210000, signal })
+    if (!validateAiPlan(data?.stages, total)) throw { friendlyMessage: 'AI trả về lộ trình thiếu hoặc trùng buổi học. Hãy soạn lại.' }
+    const stages = data.stages.map(stage => ({ ...stage,
+      materials: stage.materials.filter(item => safeMaterialUrl(item?.url)).map(item => ({ label: String(item.label || item.url), url: safeMaterialUrl(item.url) })),
+      lessons: stage.lessons.map(lesson => ({ ...lesson, material_url: safeMaterialUrl(lesson.material_url) })),
+    }))
+    return { stages, searchUsed: !!data.searchUsed, model: data.model || '', warnings: Array.isArray(data.warnings) ? data.warnings.filter(item => typeof item === 'string') : [] }
+  } catch (failure) {
+    if (axios.isCancel(failure)) throw failure
+    const detail = failure.response?.data?.detail
+    const message = typeof detail === 'string' ? detail : Array.isArray(detail) ? 'Thông tin chưa hợp lệ. Kiểm tra số buổi, thời lượng và hồ sơ học tập.' :
+      failure.code === 'ECONNABORTED' ? 'AI soạn quá lâu. Hãy giảm số buổi hoặc thử lại.' :
+      failure.friendlyMessage || aiErrorMessage(failure, 'AI không tạo được lộ trình. Hãy thử lại.')
+    throw { ...failure, friendlyMessage: message }
+  }
+}
+
+/** Lịch sử chat AI (ai_sessions + ai_messages): CRUD lưu trữ, chỉ gọi khi đã đăng nhập. */
+
+function aiHistoryErrorMessage(failure, fallback) {
+  const detail = failure.response?.data?.detail
+  if (detail) return detail
+  if (failure.response?.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
+  return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
+}
+
+/** Tên session = tin nhắn đầu tiên của user, gọn 1 dòng, tối đa 80 ký tự (backend cho 200). */
+export function aiSessionTitleFromText(text, max = 80) {
+  const clean = String(text || '').trim().replace(/\s+/g, ' ')
+  if (!clean) return 'Cuộc trò chuyện mới'
+  if (clean.length <= max) return clean
+  return clean.slice(0, Math.max(1, max - 1)).trimEnd() + '…'
+}
+
+/** GET /api/ai/sessions — phiên chat của mình (mới nhất trước). */
+export async function fetchAiSessions() {
+  try {
+    const { data } = await api.get('/api/ai/sessions')
+    return Array.isArray(data) ? data : []
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: aiHistoryErrorMessage(failure, 'Không tải được lịch sử trò chuyện.') }
+  }
+}
+
+/** POST /api/ai/sessions {title} — tạo phiên mới. Nhận cả title thô, tự rút gọn từ tin nhắn đầu. */
+export async function createAiSession(title) {
+  try {
+    const { data } = await api.post('/api/ai/sessions', { title: aiSessionTitleFromText(title) })
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: aiHistoryErrorMessage(failure, 'Không tạo được cuộc trò chuyện mới. Vui lòng thử lại.') }
+  }
+}
+
+/** DELETE /api/ai/sessions/{id} — xóa phiên + toàn bộ tin nhắn (204). */
+export async function deleteAiSession(id) {
+  try {
+    await api.delete(`/api/ai/sessions/${encodeURIComponent(String(id || ''))}`)
+    return null
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: aiHistoryErrorMessage(failure, 'Không xóa được cuộc trò chuyện.') }
+  }
+}
+
+/** Row server {role, content} -> message UI {id, role, text}. */
+export function aiMessageFromServer(row = {}) {
+  return {
+    id: row.id || String(Math.random()),
+    role: row.role === 'assistant' ? 'assistant' : 'user',
+    text: String(row.content ?? row.text ?? ''),
+  }
+}
+
+/** GET /api/ai/sessions/{id}/messages — tin nhắn theo thời gian tăng dần (đủ dựng context RAG). */
+export async function fetchAiMessages(sessionId, { limit = 200, offset = 0 } = {}) {
+  try {
+    const { data } = await api.get(`/api/ai/sessions/${encodeURIComponent(String(sessionId || ''))}/messages`, {
+      params: { limit, offset },
+    })
+    return Array.isArray(data) ? data : []
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: aiHistoryErrorMessage(failure, 'Không tải được tin nhắn.') }
+  }
+}
+
+/** POST /api/ai/sessions/{id}/messages {role, content} — lưu 1 lượt nhắn. */
+export async function createAiMessage(sessionId, { role, content } = {}) {
+  try {
+    const { data } = await api.post(`/api/ai/sessions/${encodeURIComponent(String(sessionId || ''))}/messages`, {
+      role: role === 'assistant' ? 'assistant' : 'user',
+      content: String(content ?? '').trim(),
+    })
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: aiHistoryErrorMessage(failure, 'Không lưu được tin nhắn lên server.') }
+  }
+}
+
+/** Onboarding bắt buộc sau đăng ký: hỏi lớp + ≥3 mục tiêu + giọng AI + giờ/tuần.
+ *  Trạng thái suy từ DB (grade/goals/preferences) để resume đúng bước dở. */
+
+function onboardingErrorMessage(failure, fallback) {
+  const detail = failure.response?.data?.detail
+  if (detail) return typeof detail === 'string' ? detail : 'Thông tin onboarding chưa hợp lệ.'
+  if (failure.response?.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
+  return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
+}
+
+/** GET /api/onboarding/status — {grade, goals_count, has_preferences, completed, missing, next_step}. */
+export async function fetchOnboardingStatus() {
+  try {
+    const { data } = await api.get('/api/onboarding/status')
+    return {
+      grade: data?.grade ?? null,
+      goalsCount: Number(data?.goals_count ?? data?.goalsCount ?? 0),
+      hasPreferences: !!(data?.has_preferences ?? data?.hasPreferences),
+      aiTone: data?.ai_tone ?? data?.aiTone ?? null,
+      weeklyHours: data?.weekly_hours ?? data?.weeklyHours ?? null,
+      completed: !!data?.completed,
+      missing: Array.isArray(data?.missing) ? data.missing : [],
+      nextStep: data?.next_step ?? data?.nextStep ?? 'grade',
+    }
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: onboardingErrorMessage(failure, 'Không tải được trạng thái onboarding.') }
+  }
+}
+
+/** POST /api/onboarding/complete — lưu 4 nhóm vào từng bảng, trả status mới. */
+export async function completeOnboarding({ grade, aiTone, weeklyHours, goals } = {}) {
+  const payload = {
+    grade: String(grade || '').trim(),
+    ai_tone: String(aiTone || 'cute').trim(),
+    weekly_hours: Number(weeklyHours),
+    goals: (Array.isArray(goals) ? goals : []).map(item => ({
+      title: String(item.title || '').trim(),
+      ...(item.targetScore ?? item.target_score ?? null) !== null && String(item.targetScore ?? item.target_score ?? '') !== ''
+        ? { target_score: Number(item.targetScore ?? item.target_score) }
+        : {},
+      icon: String(item.icon || '🌱').slice(0, 16) || '🌱',
+      start_date: item.startDate || item.start_date,
+      end_date: item.endDate || item.end_date || item.date,
+    })),
+  }
+  try {
+    const { data } = await api.post('/api/onboarding/complete', payload)
+    return {
+      grade: data?.grade ?? null,
+      goalsCount: Number(data?.goals_count ?? 0),
+      hasPreferences: !!(data?.has_preferences),
+      completed: !!data?.completed,
+      missing: Array.isArray(data?.missing) ? data.missing : [],
+      nextStep: data?.next_step ?? 'done',
+    }
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: onboardingErrorMessage(failure, 'Không lưu được onboarding. Vui lòng thử lại.') }
   }
 }
 

@@ -1,0 +1,35 @@
+.onboarding-page { min-height: 100vh; display: grid; place-items: start center; padding: 32px 16px 64px; background: var(--canvas, #F3F8FF); }
+.onboarding-card { width: min(760px, 100%); background: var(--card, #fff); border: 1px solid var(--line, #e3e9f5); border-radius: 20px; padding: 28px; box-shadow: 0 8px 28px rgba(20, 96, 210, .08); }
+.onboarding-card h1 { font-size: 26px; line-height: 1.3; margin: 8px 0; font-family: 'Baloo 2', sans-serif; }
+.onboarding-card h2 { font-size: 19px; margin: 20px 0 8px; }
+.onboarding-sub { color: var(--muted, #69748A); margin: 0 0 12px; }
+.onboarding-progress { display: flex; gap: 8px; list-style: none; padding: 0; margin: 16px 0; }
+.onboarding-progress li { flex: 1; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: #f1f5fd; font-size: 13px; font-weight: 700; color: #5b6b85; }
+.onboarding-progress li span { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: #fff; border: 1px solid var(--line, #e3e9f5); }
+.onboarding-progress li.current { background: #e3edff; color: var(--blue, #1460D2); outline: 2px solid var(--blue, #1460D2); }
+.onboarding-progress li.done { background: #e6f7ef; color: #149A7E; }
+.onboarding-saved { background: #FFF0BC; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+.onboarding-grades > div { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+.onboarding-grades button { min-height: 44px; padding: 10px 16px; border-radius: 12px; border: 1px solid var(--line, #e3e9f5); background: #fff; font-weight: 800; }
+.onboarding-grades button.selected { background: var(--blue, #1460D2); color: #fff; border-color: var(--blue, #1460D2); }
+.onboarding-goal { border: 1px solid var(--line, #e3e9f5); border-radius: 14px; padding: 16px; margin: 12px 0; }
+.onboarding-goal legend { font-weight: 800; padding: 0 8px; }
+.onboarding-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.onboarding-card label { display: grid; gap: 6px; margin: 10px 0; font-size: 14px; font-weight: 700; }
+.onboarding-card input, .onboarding-card select { min-height: 44px; border-radius: 10px; border: 1px solid var(--line, #e3e9f5); padding: 10px 12px; font-size: 16px; }
+.onboarding-hours input[type="range"] { width: 100%; accent-color: var(--blue, #1460D2); min-height: 44px; }
+.onboarding-review { background: #F0E4FF; border-radius: 12px; padding: 12px 14px; margin-top: 12px; font-size: 14px; }
+.composer-actions { display: flex; gap: 12px; margin-top: 16px; }
+.tone-options { display: grid; gap: 10px; }
+.tone-options button { display: flex; gap: 12px; align-items: center; text-align: left; border: 1px solid var(--line, #e3e9f5); border-radius: 14px; padding: 12px; background: #fff; min-height: 64px; }
+.tone-options button.selected { outline: 2px solid var(--blue, #1460D2); background: #eef4ff; }
+@media (max-width: 600px) {
+  .onboarding-card { padding: 20px 16px; }
+  .onboarding-progress { flex-wrap: wrap; }
+  .onboarding-progress li { flex: 1 1 45%; }
+  .onboarding-grid { grid-template-columns: 1fr; }
+}
+html[data-theme="dark"] .onboarding-page { background: #101722; }
+html[data-theme="dark"] .onboarding-card { background: #1B2534; border-color: #2a3a52; color: #E6EDF7; }
+html[data-theme="dark"] :is(.onboarding-progress li, .tone-options button, .onboarding-grades button, .onboarding-card input, .onboarding-card select, .onboarding-goal) { background: #243145; border-color: #2a3a52; color: #E6EDF7; }
+html[data-theme="dark"] .onboarding-progress li.current { background: #24406e; }

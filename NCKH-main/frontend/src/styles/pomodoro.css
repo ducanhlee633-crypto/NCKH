@@ -15,3 +15,12 @@
 .duration-presets { display: flex; flex-wrap: wrap; gap: 8px; }
 .duration-presets .ghost-button { flex: 1 1 auto; min-height: 38px; font-size: 12px; }
 .duration-reset { width: 100%; min-height: 40px; }
+
+/* Giữ Phòng tập trung mounted nền khi ở page khác — hẹn giờ vẫn đếm. */
+.focus-keepalive[hidden] { display: none; }
+
+/* Badge mini ở Topbar: cho thấy timer vẫn đếm khi đang ở page khác. */
+.focus-mini-badge { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 14px; color: #fff; background: linear-gradient(135deg, hsl(var(--accent-hue, 216) 84.5% 54.5%), hsl(var(--accent-hue, 216) 70% 42%)); border: 0; border-radius: 999px; font-size: 12px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 14px hsl(var(--accent-hue, 216) 84.5% 54.5% / 0.35); }
+.focus-mini-badge b { font-variant-numeric: tabular-nums; font-size: 14px; letter-spacing: 0.5px; }
+.focus-mini-badge:hover { filter: brightness(1.08); }
+.focus-mini-badge:focus-visible { outline: 3px solid hsl(var(--accent-hue, 216) 100% 80%); outline-offset: 2px; }

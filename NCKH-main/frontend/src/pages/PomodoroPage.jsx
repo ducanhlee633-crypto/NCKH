@@ -9,10 +9,20 @@ import {
   getSession,
   onSessionChange,
 } from '../backendApi'
+import {
+  readFocusTimer,
+  remainingFromDeadline,
+  writeFocusTimer,
+} from '../data/focusTimer'
 
 const DEFAULT_MINUTES = [25, 5, 15]
 const modeKeys = ['focus', 'short', 'long']
 const today = () => new Date().toLocaleDateString('en-CA')
+
+// Timer lần cuối còn chạy (nếu có) — để restore khi reload trang. Khi chỉ
+// chuyển page trong app thì PomodoroPage được giữ mounted nền (xem App.jsx)
+// nên timer tiếp tục đếm bình thường.
+const restoredTimer = readFocusTimer()
 
 function loadMinutes() {
   try {
@@ -22,6 +32,14 @@ function loadMinutes() {
   return [...DEFAULT_MINUTES]
 }
 
+function loadFocusLengthFallback() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('nhip-hoc-durations'))
+    if (Array.isArray(saved) && Number.isInteger(saved[0]) && saved[0] >= 1 && saved[0] <= 180) return saved[0]
+  } catch { /* Storage may be unavailable. */ }
+  return 25
+}
+
 function loadStats() {
   try {
     const saved = JSON.parse(localStorage.getItem('nhip-hoc-focus'))
@@ -29,7 +47,7 @@ function loadStats() {
       return {
         date: saved.date,
         sessions: saved.sessions,
-        minutes: Number.isInteger(saved.minutes) && saved.minutes >= 0 ? saved.minutes : saved.sessions * 25,
+        minutes: Number.isInteger(saved.minutes) && saved.minutes >= 0 ? saved.minutes : saved.sessions * loadFocusLengthFallback(),
       }
     }
   } catch { /* Storage may be unavailable. */ }
@@ -40,13 +58,21 @@ export default function PomodoroPage() {
   const [customMinutes, setCustomMinutes] = useState(loadMinutes)
   const durations = customMinutes.map((m) => m * 60)
   const modeLabels = [`Tập trung ${customMinutes[0]}’`, `Nghỉ ${customMinutes[1]}’`, `Nghỉ ${customMinutes[2]}’`]
-  const [mode, setMode] = useState(0)
-  const [remaining, setRemaining] = useState(customMinutes[0] * 60)
-  const [running, setRunning] = useState(false)
+  // Restore timer còn dang dở từ lần trước (reload giữa chừng). Thời gian còn
+  // lại luôn tính từ `deadline` nên đúng dù user đã rời đi bao lâu.
+  const [mode, setMode] = useState(restoredTimer?.mode ?? 0)
+  const [remaining, setRemaining] = useState(() => {
+    if (!restoredTimer) return customMinutes[0] * 60
+    if (restoredTimer.running) return remainingFromDeadline(restoredTimer.deadline)
+    return restoredTimer.remaining
+  })
+  const [running, setRunning] = useState(() => restoredTimer?.running ?? false)
   const [stats, setStats] = useState(loadStats)
   const [sound, setSound] = useState(null)
   const [soundError, setSoundError] = useState('')
-  const deadline = useRef(null)
+  // Giữ deadline trong ref để tick tính giờ còn lại theo thời gian thực —
+  // đúng cả khi tab browser bị ẩn hay user đang ở page khác.
+  const deadline = useRef(restoredTimer?.running ? restoredTimer.deadline : null)
   const audio = useRef(null)
   // Môn học của phiên focus (khóa cứng 9 lựa chọn, '' = không chọn) — gửi kèm khi POST /api/pomodoro.
   const [subject, setSubject] = useState(() => {
@@ -97,6 +123,9 @@ export default function PomodoroPage() {
 
   useEffect(() => {
     try { localStorage.setItem('nhip-hoc-focus', JSON.stringify(stats)) } catch { /* Keep in-memory statistics. */ }
+    // Báo cho các page cùng tab (VD: Dashboard dùng useStoredState) cập nhật số
+    // phút live. Trước đây ghi thẳng localStorage nên dashboard đang mở vẫn hiện số cũ.
+    try { window.dispatchEvent(new CustomEvent('nhip-hoc-storage', { detail: { key: 'nhip-hoc-focus' } })) } catch { /* Keep in-memory statistics. */ }
   }, [stats])
 
   useEffect(() => {
@@ -107,9 +136,14 @@ export default function PomodoroPage() {
     if (!running) return
     const tick = () => {
       if (deadline.current === null) return
-      const seconds = Math.max(0, Math.ceil((deadline.current - Date.now()) / 1000))
+      const seconds = remainingFromDeadline(deadline.current)
       setRemaining(seconds)
+      // Lưu nền mỗi tick (silent để badge Topbar không render 5 lần/giây —
+      // badge tự đếm từ deadline mỗi giây). Nhờ deadline persist mà chuyển
+      // page hay reload giữa chừng vẫn tính đúng thời gian còn lại.
+      writeFocusTimer({ mode, running: true, deadline: deadline.current, remaining: seconds }, { silent: true })
       if (seconds > 0) return
+      const finishedDeadline = deadline.current
       deadline.current = null
       setRunning(false)
       if (mode === 0) {
@@ -133,22 +167,50 @@ export default function PomodoroPage() {
             .catch((failure) => setSyncError(failure.friendlyMessage || 'Không lưu được phiên lên server. Đã giữ số local.'))
         }
         // Mỗi 4 phiên tập trung thì nghỉ dài, còn lại nghỉ ngắn. Tự chạy phiên nghỉ tiếp theo.
+        // Mốc nối từ deadline vừa hết hạn (tránh trôi giờ) + bắt kịp khi user vắng mặt lâu:
+        // nếu cả phiên nghỉ cũng đã trôi qua trong lúc rời đi thì về thẳng focus, dừng lại.
         const doneSessions = (stats.date === today() ? stats.sessions : 0) + 1
         const nextMode = doneSessions % 4 === 0 ? 2 : 1
         const nextSeconds = customMinutes[nextMode] * 60
-        setMode(nextMode)
-        setRemaining(nextSeconds)
-        deadline.current = Date.now() + nextSeconds * 1000
-        setRunning(true)
+        const nextDeadline = finishedDeadline + nextSeconds * 1000
+        if (nextDeadline <= Date.now()) {
+          setMode(0)
+          setRemaining(customMinutes[0] * 60)
+          writeFocusTimer({ mode: 0, running: false, deadline: null, remaining: customMinutes[0] * 60 })
+        } else {
+          setMode(nextMode)
+          setRemaining(nextSeconds)
+          deadline.current = nextDeadline
+          setRunning(true)
+          writeFocusTimer({ mode: nextMode, running: true, deadline: nextDeadline, remaining: nextSeconds })
+        }
       } else {
         // Nghỉ xong thì quay về phiên tập trung, dừng lại để người dùng chủ động bắt đầu.
         setMode(0)
         setRemaining(customMinutes[0] * 60)
+        writeFocusTimer({ mode: 0, running: false, deadline: null, remaining: customMinutes[0] * 60 })
       }
     }
     const interval = setInterval(tick, 200)
     return () => clearInterval(interval)
   }, [running, mode, customMinutes, stats.date, stats.sessions])
+
+  // Page được giữ mounted nền nên chỉ fetch server 1 lần lúc mở app —
+  // refresh lại mỗi khi user quay về #pomodoro để số liệu mới nhất.
+  useEffect(() => {
+    const onHashChange = () => {
+      if (window.location.hash === '#pomodoro') refreshServer()
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  // Khi đồng hồ đang dừng, giữ bản persist đồng bộ (đổi mode, sửa số phút...)
+  // để reload mở lại đúng trạng thái. Tick lúc chạy đã tự persist riêng.
+  useEffect(() => {
+    if (running) return
+    writeFocusTimer({ mode, running: false, deadline: null, remaining }, { silent: true })
+  }, [mode, remaining, running])
 
   useEffect(() => () => { audio.current?.close() }, [])
 
@@ -156,7 +218,9 @@ export default function PomodoroPage() {
     deadline.current = null
     setRunning(false)
     setMode(nextMode)
-    setRemaining(customMinutes[nextMode] * 60)
+    const seconds = customMinutes[nextMode] * 60
+    setRemaining(seconds)
+    writeFocusTimer({ mode: nextMode, running: false, deadline: null, remaining: seconds })
   }
 
   function updateMinutes(index, value) {
@@ -180,14 +244,18 @@ export default function PomodoroPage() {
 
   function toggleTimer() {
     if (running) {
-      setRemaining(Math.max(0, Math.ceil((deadline.current - Date.now()) / 1000)))
+      const seconds = remainingFromDeadline(deadline.current)
+      setRemaining(seconds)
       deadline.current = null
       setRunning(false)
+      writeFocusTimer({ mode, running: false, deadline: null, remaining: seconds })
     } else {
       const seconds = remaining || durations[mode]
       setRemaining(seconds)
-      deadline.current = Date.now() + seconds * 1000
+      const nextDeadline = Date.now() + seconds * 1000
+      deadline.current = nextDeadline
       setRunning(true)
+      writeFocusTimer({ mode, running: true, deadline: nextDeadline, remaining: seconds })
     }
   }
 

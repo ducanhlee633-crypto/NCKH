@@ -1,11 +1,11 @@
 # Endpoint lưu lựa chọn Settings của người dùng (SettingsPage.jsx).
-# Chỉ nhận 9 field lựa chọn hiển thị/học tập — KHÔNG chứa name/username/nickname/email/grade/password.
+# Chỉ nhận 10 field lựa chọn hiển thị/học tập/AI — KHÔNG chứa name/username/nickname/email/grade/password.
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from auth import SupabaseUser, get_current_supabase_user
-from schema import UserPreferences, UserPreferencesUpdate
+from schema import AI_TONE_VALUES, UserPreferences, UserPreferencesUpdate
 from supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/preferences", tags=["preferences"])
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/preferences", tags=["preferences"])
 PREFERENCES_TABLE = "user_preferences"
 PREFERENCES_COLUMNS = (
     "id,user_id,avatar,theme,color,ranking,streak,reminders,"
-    "reminder_minutes,weekly_hours,sound,created_at,updated_at"
+    "reminder_minutes,weekly_hours,sound,ai_tone,created_at,updated_at"
 )
 
 DEFAULTS: dict = {
@@ -26,7 +26,13 @@ DEFAULTS: dict = {
     "reminder_minutes": 15,
     "weekly_hours": 24,
     "sound": True,
+    "ai_tone": "cute",
 }
+
+
+def _normalize_ai_tone(value: object) -> str:
+    tone = str(value or "cute").strip()
+    return tone if tone in AI_TONE_VALUES else "cute"
 
 
 def _raise_database_error(error: Exception) -> None:
@@ -60,6 +66,8 @@ def _to_preferences(row: dict | None, user_id: UUID | None = None) -> UserPrefer
     resolved = (row or {}).get("user_id") or (row or {}).get("id") or (str(user_id) if user_id else None)
     if resolved is not None:
         data["user_id"] = resolved
+    # DB cũ chưa có cột ai_tone / dữ liệu tay sai giá trị -> chuẩn hóa về default.
+    data["ai_tone"] = _normalize_ai_tone(data.get("ai_tone"))
     # DB có thể trả None cho avatar -> giữ None (frontend map sang '').
     return UserPreferences.model_validate(data)
 

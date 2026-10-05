@@ -4,8 +4,9 @@ import Icon from '../components/Icon'
 import useStoredState from '../data/useStoredState'
 import useScheduleBlocks from '../data/useScheduleBlocks'
 import useDeadlines from '../data/useDeadlines'
+import useRoadmaps from '../data/useRoadmaps'
 import { CardHeader, EmptyState, ProgressBar } from '../components/PageComponents'
-import { createDeadline, displayUser, fetchPomodoroSummary, getSession, onSessionChange, updateDeadline } from '../backendApi'
+import { createDeadline, displayUser, fetchPomodoroSessions, getSession, onSessionChange, updateDeadline } from '../backendApi'
 import { gradeLabel } from '../data/settings'
 import { calendarEvents } from '../data/calendar'
 
@@ -16,35 +17,105 @@ const deadlineStatusOf = item => !!item?.status
 const deadlinePriorityOf = item => (item?.priority === 'high' || item?.priority === 'low' ? item.priority : 'medium')
 const PRIORITY_LABEL_DASH = { high: 'Cao', medium: 'Trung bình', low: 'Thấp' }
 
+// Ngày local của 1 phiên Pomodoro (dùng started_at). Server lọc theo ngày UTC nên
+// phiên sáng sớm giờ VN (UTC+7) có thể rơi sang hôm trước — phải lọc lại local ở đây
+// (cùng cách làm với StatsPage) thì "phút tập trung hôm nay" mới đúng.
+const sessionLocalDay = row => {
+  const date = new Date(row?.started_at)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-CA')
+}
+const sessionMinutes = row => Math.max(0, Number(row?.focus_minutes ?? 0) || 0)
+// Số phút focus mỗi phiên do user tự chỉnh (25/50/90/custom) nằm ở 'nhip-hoc-durations'.
+// Fallback cho bản local cũ thiếu field `minutes`: đừng cứng 25.
+function readFocusLengthFallback() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('nhip-hoc-durations'))
+    if (Array.isArray(saved) && Number.isInteger(saved[0]) && saved[0] >= 1 && saved[0] <= 180) return saved[0]
+  } catch { /* Storage may be unavailable. */ }
+  return 25
+}
+function localMinutesOf(focus, todayKey) {
+  if (!focus || focus.date !== todayKey) return 0
+  if (Number.isInteger(focus.minutes) && focus.minutes >= 0) return focus.minutes
+  const sessions = Number.isInteger(focus.sessions) && focus.sessions > 0 ? focus.sessions : 0
+  return sessions * readFocusLengthFallback()
+}
+
 export default function DashboardPage({ onNavigate }) {
   const [tasks, saveTasks, error] = useStoredState('nhip-hoc-tasks', [])
   const { deadlines, loggedIn: deadlineLoggedIn, serverRows: deadlineRows, setServerRows: setDeadlineRows, setLocalDeadlines: saveDeadlines, localError: deadlineLocalError } = useDeadlines()
   const [deadlineError, setDeadlineError] = useState('')
   const [profile] = useStoredState('nhip-hoc-settings', {})
   const [accountName, setAccountName] = useState(() => displayUser(getSession())?.name || 'bạn')
-  useEffect(() => onSessionChange((session) => setAccountName(displayUser(session)?.name || 'bạn')), [])
+  // Lớp ưu tiên từ profile server khi đã đăng nhập, fallback settings local.
+  const [serverGrade, setServerGrade] = useState(() => getSession()?.profile?.grade || '')
+  useEffect(() => onSessionChange((session) => {
+    setAccountName(displayUser(session)?.name || 'bạn')
+    setServerGrade(session?.profile?.grade || '')
+  }), [])
   // Cùng nguồn sự thật với SchedulePage: login -> server, chưa login -> local.
   // Sửa lỗi dashboard báo sai (hiện block IELTS đã xóa) do trước đây chỉ đọc local.
   const { eventMap: events, loadingSchedule } = useScheduleBlocks()
-  const [roadmaps] = useStoredState('nhip-hoc-roadmaps', [])
+  // Lộ trình hiển thị trong lịch: login -> server, chưa login -> local cũ.
+  const { roadmaps } = useRoadmaps()
   const [focus] = useStoredState('nhip-hoc-focus', {})
   const [serverFocusMinutes, setServerFocusMinutes] = useState(null)
+  const [hasSession, setHasSession] = useState(() => !!getSession())
   useEffect(() => {
+    let cancelled = false
     const load = async (session) => {
-      if (!session) {
-        setServerFocusMinutes(null)
+      const active = session ?? getSession()
+      setHasSession(!!active)
+      if (!active) {
+        if (!cancelled) setServerFocusMinutes(null)
         return
       }
       try {
-        const day = dateKey(new Date())
-        const summary = await fetchPomodoroSummary(day, day)
-        setServerFocusMinutes(Number(summary.total_minutes ?? 0))
+        // Lấy rộng ±1 ngày rồi lọc theo ngày local: bù lệch múi giờ UTC của server
+        // (phiên sáng sớm giờ VN thuộc UTC hôm trước, query đúng hôm nay sẽ mất).
+        const base = new Date()
+        const lower = new Date(base)
+        lower.setDate(lower.getDate() - 1)
+        const upper = new Date(base)
+        upper.setDate(upper.getDate() + 1)
+        const rows = await fetchPomodoroSessions(dateKey(lower), dateKey(upper))
+        if (cancelled) return
+        const key = dateKey(new Date())
+        const total = (Array.isArray(rows) ? rows : [])
+          .filter(row => sessionLocalDay(row) === key)
+          .reduce((sum, row) => sum + sessionMinutes(row), 0)
+        setServerFocusMinutes(total)
       } catch {
         // Rớt mạng: giữ số local.
       }
     }
-    load(getSession())
-    return onSessionChange(load)
+    // onSessionChange gọi load ngay 1 lần + mỗi khi login/logout.
+    const stopSession = onSessionChange(load)    // Timer có thể chạy xong ở nền (PomodoroPage keepalive) trong lúc user đang ở
+    // dashboard: refresh khi quay lại dashboard / focus lại tab / có số local mới / định kỳ.
+    const refresh = () => load()
+    const onHash = () => {
+      if ((window.location.hash || '').replace(/^#/, '').split('/')[0] === 'dashboard') refresh()
+    }
+    const onStorage = event => {
+      if (event.key === 'nhip-hoc-focus' || event.key === null) refresh()
+    }
+    const onLocalUpdate = event => {
+      if (!event?.detail || event.detail.key === 'nhip-hoc-focus') refresh()
+    }
+    window.addEventListener('hashchange', onHash)
+    window.addEventListener('focus', refresh)
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('nhip-hoc-storage', onLocalUpdate)
+    const timer = setInterval(refresh, 30000)
+    return () => {
+      cancelled = true
+      stopSession()
+      window.removeEventListener('hashchange', onHash)
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('nhip-hoc-storage', onLocalUpdate)
+      clearInterval(timer)
+    }
   }, [])
   const [showDeadline, setShowDeadline] = useState(false)
   const [title, setTitle] = useState('')
@@ -56,9 +127,10 @@ export default function DashboardPage({ onNavigate }) {
   const remaining = tasks.length - completed
   const nextTask = tasks.find(task => !task.done)
   const upcoming = deadlines.filter(item => { if (deadlineStatusOf(item)) return false; const day = deadlineDateOf(item); if (!day) return false; const due = new Date(day + 'T' + deadlineTimeOf(item)); return due >= now && due.getTime() <= now.getTime() + 7 * 86400000 }).sort((a, b) => (deadlineDateOf(a) + deadlineTimeOf(a)).localeCompare(deadlineDateOf(b) + deadlineTimeOf(b)))
-  const sessions = focus.date === today ? focus.sessions || 0 : 0
-  const localFocusMinutes = focus.date === today ? (focus.minutes ?? sessions * 25) : 0
-  const focusMinutesToday = serverFocusMinutes ?? localFocusMinutes
+  const localFocusMinutes = localMinutesOf(focus, today)
+  // Đã đăng nhập: lấy max(server, local) để không tụt số trong lúc phiên mới
+  // vừa xong local nhưng POST server chưa kịp về; chưa đăng nhập: chỉ dùng local.
+  const focusMinutesToday = hasSession ? Math.max(serverFocusMinutes ?? 0, localFocusMinutes) : localFocusMinutes
   const week = Array.from({ length: 7 }, (_, index) => { const day = new Date(now); day.setDate(day.getDate() - (day.getDay() + 6) % 7 + index); return day })
   const visibleTasks = tasks.filter(task => filter === 'all' || (filter === 'done' ? task.done : !task.done))
   const calendar = calendarEvents(events, roadmaps, deadlines)
@@ -122,7 +194,7 @@ export default function DashboardPage({ onNavigate }) {
     <section className="study-notebook" aria-labelledby="notebook-title">
       <div className="notebook-copy">
         <span className="notebook-tab"><Icon name="book" size={16} />Sổ học tập của bạn</span>
-        <p className="notebook-context">{gradeLabel(profile.grade)}</p>
+        <p className="notebook-context">{gradeLabel(serverGrade || profile.grade)}</p>
         <h2 id="notebook-title">Bắt đầu nhỏ,<br /> hiểu thêm mỗi ngày.</h2>
         <p>{nextTask ? <>Việc tiếp theo: <strong>{nextTask.title}</strong></> : 'Ghi lại bài cần làm, rồi dành một khoảng thời gian riêng cho việc học.'}</p>
         <button className="primary-button" onClick={() => nextTask ? onNavigate('pomodoro') : taskInput()}>{nextTask ? 'Vào phòng tập trung' : 'Thêm việc đầu tiên'}<Icon name="arrow" size={18} /></button>

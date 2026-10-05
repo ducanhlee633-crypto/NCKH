@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import api, {
+  aiMessageFromServer,
+  aiSessionTitleFromText,
   clearSession,
+  createAiMessage,
+  createAiSession,
   createScheduleBlock,
+  deleteAiSession,
   deleteScheduleBlock,
   displayUser,
+  fetchAiMessages,
+  fetchAiSessions,
   fetchScheduleBlocks,
   getSession,
   loginUser,
@@ -152,6 +159,53 @@ test('tạo block lỗi validate backend trả friendlyMessage từ detail', asy
   api.defaults.adapter = async () => { throw { response: { status: 422, data: { detail: 'Giờ kết thúc phải sau giờ bắt đầu trong cùng ngày.' } } } }
   await assert.rejects(createScheduleBlock({ title: 'X' }), (failure) => {
     assert.equal(failure.friendlyMessage, 'Giờ kết thúc phải sau giờ bắt đầu trong cùng ngày.')
+    return true
+  })
+})
+
+test('tên session lấy từ tin nhắn đầu, gọn 1 dòng tối đa 80 ký tự', () => {
+  assert.equal(aiSessionTitleFromText('langchain là gì?'), 'langchain là gì?')
+  assert.equal(aiSessionTitleFromText('  nhiều   khoảng\ntrắng  '), 'nhiều khoảng trắng')
+  assert.equal(aiSessionTitleFromText(''), 'Cuộc trò chuyện mới')
+  const long = 'a'.repeat(100)
+  assert.equal(aiSessionTitleFromText(long).length, 80)
+  assert.ok(aiSessionTitleFromText(long).endsWith('…'))
+})
+
+test('aiMessageFromServer đổi {role,content} thành message UI', () => {
+  assert.deepEqual(aiMessageFromServer({ id: 'm1', role: 'assistant', content: 'Xin chào' }), { id: 'm1', role: 'assistant', text: 'Xin chào' })
+  assert.deepEqual(aiMessageFromServer({ id: 'm2', role: 'user', content: 'Hi' }), { id: 'm2', role: 'user', text: 'Hi' })
+})
+
+test('AI sessions/messages gọi đúng endpoint lưu trữ', async () => {
+  const requests = []
+  const session = { id: 'sess-1', user_id: 'user-1', title: 'langchain là gì?' }
+  const message = { id: 'msg-1', session_id: 'sess-1', user_id: 'user-1', role: 'user', content: 'langchain là gì?' }
+  api.defaults.adapter = async config => {
+    requests.push(config)
+    if (config.url === '/api/ai/sessions' && config.method === 'post') return { data: session, status: 201, headers: {}, config }
+    if (config.url === '/api/ai/sessions' && config.method === 'get') return { data: [session], status: 200, headers: {}, config }
+    if (config.url === '/api/ai/sessions/sess-1/messages' && config.method === 'post') return { data: message, status: 201, headers: {}, config }
+    if (config.url === '/api/ai/sessions/sess-1/messages' && config.method === 'get') return { data: [message], status: 200, headers: {}, config }
+    if (config.url === '/api/ai/sessions/sess-1' && config.method === 'delete') return { data: null, status: 204, headers: {}, config }
+    return { data: {}, status: 200, headers: {}, config }
+  }
+  const created = await createAiSession('  langchain   là gì?  ')
+  assert.equal(requests[0].url, '/api/ai/sessions')
+  assert.equal(created.id, 'sess-1')
+  // Payload title đã gọn 1 dòng.
+  assert.equal(JSON.parse(requests[0].data).title, 'langchain là gì?')
+  assert.equal((await fetchAiSessions())[0].id, 'sess-1')
+  const saved = await createAiMessage('sess-1', { role: 'user', content: 'langchain là gì?' })
+  assert.equal(saved.id, 'msg-1')
+  assert.equal((await fetchAiMessages('sess-1'))[0].role, 'user')
+  assert.equal(await deleteAiSession('sess-1'), null)
+})
+
+test('lỗi server AI history được gắn friendlyMessage', async () => {
+  api.defaults.adapter = async () => { throw { response: { status: 401, data: {} } } }
+  await assert.rejects(fetchAiSessions(), (failure) => {
+    assert.equal(failure.friendlyMessage, 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.')
     return true
   })
 })

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from auth import SupabaseUser, get_current_supabase_user, unauthorized
 from config import get_settings
 from schema import (
+    GRADE_VALUES,
     LoginRequest,
     PasswordChange,
     ProfileUpdate,
@@ -21,7 +22,9 @@ from supabase_client import get_supabase_admin, get_supabase_anon
 router = APIRouter(prefix="/users", tags=["users"])
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
-PROFILE_COLUMNS = "id,username,name,nickname,created_at,updated_at"
+PROFILE_COLUMNS = "id,username,name,nickname,grade,created_at,updated_at"
+# Fallback cho DB cũ chưa chạy migration thêm cột grade.
+PROFILE_COLUMNS_LEGACY = "id,username,name,nickname,created_at,updated_at"
 PROFILES_TABLE = "profiles"
 
 
@@ -32,6 +35,18 @@ def _clean_username(value: str) -> str:
 def _clean_nickname(value: str) -> str:
     # Nickname validate chặt như username: 3-64, [A-Za-z0-9_.-], unique, lowercase.
     return value.strip().lower()
+
+
+def _clean_grade(value: str | None) -> str | None:
+    """Chuẩn hóa lớp: None/""/khoảng trắng -> None (xóa), "6".."12" -> giữ, còn lại -> ValueError."""
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    if not cleaned:
+        return None
+    if cleaned not in GRADE_VALUES:
+        raise ValueError(f"Grade must be one of {', '.join(GRADE_VALUES)}")
+    return cleaned
 
 
 def _raise_database_error(error: Exception) -> None:
@@ -78,11 +93,35 @@ def _fetch_profile(user_id: UUID) -> dict | None:
             .execute()
         )
     except Exception as error:
-        _raise_database_error(error)
-    return result.data[0] if result.data else None
+        # DB cũ chưa có cột grade (chưa chạy migration): fallback đọc cột cũ.
+        message = str(error).lower()
+        if "grade" in message and ("column" in message or "schema" in message or "42703" in message):
+            try:
+                result = (
+                    get_supabase_admin()
+                    .table(PROFILES_TABLE)
+                    .select(PROFILE_COLUMNS_LEGACY)
+                    .eq("id", str(user_id))
+                    .limit(1)
+                    .execute()
+                )
+            except Exception as legacy_error:
+                _raise_database_error(legacy_error)
+        else:
+            _raise_database_error(error)
+    row = result.data[0] if result.data else None
+    if row is not None and "grade" not in row:
+        row["grade"] = None
+    return row
 
 
-def _ensure_profile(user_id: UUID, username: str | None, name: str, nickname: str | None = None) -> dict:
+def _ensure_profile(
+    user_id: UUID,
+    username: str | None,
+    name: str,
+    nickname: str | None = None,
+    grade: str | None = None,
+) -> dict:
     """Lấy profile theo auth id; tự tạo nếu trigger handle_new_user chưa kịp chạy."""
     existing = _fetch_profile(user_id)
     if existing:
@@ -92,8 +131,21 @@ def _ensure_profile(user_id: UUID, username: str | None, name: str, nickname: st
         values["username"] = _clean_username(username)
     if nickname:
         values["nickname"] = _clean_nickname(nickname)
+    if grade:
+        values["grade"] = _clean_grade(grade)
     try:
-        result = get_supabase_admin().table(PROFILES_TABLE).insert(values).select(PROFILE_COLUMNS).execute()
+        try:
+            result = get_supabase_admin().table(PROFILES_TABLE).insert(values).select(PROFILE_COLUMNS).execute()
+        except Exception as insert_error:
+            # DB cũ chưa có cột grade: thử lại không kèm grade.
+            message = str(insert_error).lower()
+            if "grade" in message and "grade" in values:
+                values.pop("grade", None)
+                result = (
+                    get_supabase_admin().table(PROFILES_TABLE).insert(values).select(PROFILE_COLUMNS_LEGACY).execute()
+                )
+            else:
+                raise
         return _one(result.data)
     except Exception as error:
         # Có thể trigger đã tạo song song -> đọc lại lần nữa trước khi báo lỗi.
@@ -108,6 +160,9 @@ def _to_private(row: dict, email: str | None = None) -> UserPrivate:
     data = dict(row)
     if email is not None:
         data["email"] = email
+    # DB cũ chưa có cột grade -> mặc định None để UserPrivate vẫn validate được.
+    if "grade" not in data:
+        data["grade"] = None
     return UserPrivate.model_validate(data)
 
 
@@ -144,6 +199,7 @@ def _to_token(session, profile_row: dict | None) -> Token:
 def signup(payload: SignupRequest) -> Token:
     username = _clean_username(payload.username) if payload.username else None
     nickname = _clean_nickname(payload.nickname) if payload.nickname else None
+    grade = _clean_grade(payload.grade) if payload.grade else None
     try:
         response = get_supabase_anon().auth.sign_up(
             {
@@ -154,6 +210,7 @@ def signup(payload: SignupRequest) -> Token:
                         "username": username,
                         "name": payload.name.strip(),
                         "nickname": nickname,
+                        "grade": grade,
                     }
                 },
             }
@@ -172,7 +229,7 @@ def signup(payload: SignupRequest) -> Token:
             status_code=status.HTTP_201_CREATED,
             detail="Tạo tài khoản thành công. Vui lòng kiểm tra email để xác nhận trước khi đăng nhập.",
         )
-    profile = _ensure_profile(UUID(str(response.user.id)), username, payload.name or "", nickname)
+    profile = _ensure_profile(UUID(str(response.user.id)), username, payload.name or "", nickname, grade)
     return _to_token(response.session, profile)
 
 
@@ -268,20 +325,54 @@ def update_own_profile(
         values["nickname"] = _clean_nickname(values["nickname"])
     if "name" in values and values["name"] is not None:
         values["name"] = values["name"].strip()
+    if "grade" in values:
+        # None -> xóa lớp (NULL), "" -> xóa, "6".."12" -> đặt.
+        try:
+            values["grade"] = _clean_grade(values["grade"])
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Lớp không hợp lệ. Chọn từ 6 đến 12.",
+            ) from error
     if not values:
         row = _fetch_profile(current.id)
         if not row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
         return _to_private(row, current.email)
     try:
-        result = (
-            get_supabase_admin()
-            .table(PROFILES_TABLE)
-            .update(values)
-            .eq("id", str(current.id))
-            .select(PROFILE_COLUMNS)
-            .execute()
-        )
+        try:
+            result = (
+                get_supabase_admin()
+                .table(PROFILES_TABLE)
+                .update(values)
+                .eq("id", str(current.id))
+                .select(PROFILE_COLUMNS)
+                .execute()
+            )
+        except Exception as update_error:
+            # DB cũ chưa chạy migration thêm cột grade: Supabase báo
+            # "Could not find the 'grade' column...". Xử lý 2 trường hợp:
+            # - user có gửi grade -> báo rõ cần chạy migration (không im lặng bỏ qua).
+            # - user không gửi grade (chỉ sửa name/username) -> retry không kèm grade.
+            message = str(update_error).lower()
+            missing_grade_column = "grade" in message and (
+                "column" in message or "schema" in message or "42703" in message
+            )
+            if not missing_grade_column:
+                raise
+            if "grade" in values:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Chưa có cột grade trong bảng profiles. Hãy chạy migration trong backend/supabase/schema.sql rồi thử lại.",
+                ) from update_error
+            result = (
+                get_supabase_admin()
+                .table(PROFILES_TABLE)
+                .update(values)
+                .eq("id", str(current.id))
+                .select(PROFILE_COLUMNS_LEGACY)
+                .execute()
+            )
         row = _one(result.data)
         return _to_private(row, current.email)
     except HTTPException:

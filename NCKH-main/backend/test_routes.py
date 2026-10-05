@@ -427,5 +427,35 @@ class ScheduleBlocksTest(unittest.TestCase):
         )
 
 
+class SubjectsTest(unittest.TestCase):
+    def test_pomodoro_values_match_db_pattern(self):
+        import re
+
+        from schema import POMODORO_SUBJECT_PATTERN, POMODORO_SUBJECT_VALUES
+
+        self.assertIn("Tiếng Anh", POMODORO_SUBJECT_VALUES)  # môn chính từng bị thiếu
+        for value in POMODORO_SUBJECT_VALUES:
+            self.assertRegex(value, POMODORO_SUBJECT_PATTERN, f"{value} phải khớp pattern")
+        self.assertNotRegex("Thể dục", re.compile(POMODORO_SUBJECT_PATTERN))
+
+    def test_normalize_subject_aliases(self):
+        from subjects import normalize_subject
+
+        self.assertEqual(normalize_subject(" ngữ văn "), "Văn")
+        self.assertEqual(normalize_subject("Vật lý"), "Lí")
+        self.assertEqual(normalize_subject("Hóa học"), "Hoá")
+        self.assertEqual(normalize_subject("TIẾNG ANH"), "Tiếng Anh")
+        self.assertEqual(normalize_subject("Khoa học tự nhiên"), "KHTN")
+        self.assertEqual(normalize_subject("Thể dục"), "Thể dục")  # tên lạ giữ nguyên
+        self.assertEqual(normalize_subject(None), "")
+
+    def test_school_subjects_cover_pomodoro_labels(self):
+        from subjects import SCHOOL_SUBJECTS, normalize_subject
+
+        for name in SCHOOL_SUBJECTS:
+            canonical = normalize_subject(name)
+            self.assertTrue(canonical, f"{name} phải map được về 1 nhãn")
+
+
 if __name__ == "__main__":
     unittest.main()

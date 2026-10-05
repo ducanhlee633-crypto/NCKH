@@ -1,6 +1,6 @@
 # Endpoint cho phiên focus đã hoàn thành (PomodoroPage.jsx).
 # Gọn nhẹ: mỗi phiên 1 dòng — focus_minutes + started_at/ended_at + subject.
-# Subject khóa cứng 9 môn (None = không chọn môn).
+# Subject khóa cứng theo subjects.POMODORO_SUBJECT_VALUES (None = không chọn môn).
 # Chỉ lưu phiên focus đã chạy hết giờ; không lưu phiên đang chạy / nghỉ / hủy.
 # Không sửa — chỉ ghi, xem lại, xem thống kê, xóa của chính mình.
 from datetime import date as va_date
@@ -17,6 +17,7 @@ from schema import (
     PomodoroSessionCreate,
     PomodoroSummary,
 )
+from subjects import pomodoro_subject_error
 from supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/pomodoro", tags=["pomodoro"])
@@ -47,7 +48,7 @@ def _validate_payload(payload: PomodoroSessionCreate) -> dict:
     if subject is not None and subject not in POMODORO_SUBJECT_VALUES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Môn học phải là một trong: Toán, Lí, Hoá, Văn, Sinh, Sử, Địa, Tin, Dự án.",
+            detail=pomodoro_subject_error(),
         )
     if payload.ended_at <= payload.started_at:
         raise HTTPException(

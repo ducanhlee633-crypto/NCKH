@@ -4,7 +4,8 @@ import Modal from '../components/Modal'
 import useStoredState from '../data/useStoredState'
 import useScheduleBlocks from '../data/useScheduleBlocks'
 import useDeadlines from '../data/useDeadlines'
-import { defaultSubjects } from '../data/subjects'
+import useRoadmaps from '../data/useRoadmaps'
+import { SCHOOL_SUBJECTS, defaultSubjects } from '../data/subjects'
 import { calendarEvents, layoutEvents, minutes } from '../data/calendar'
 import { createDeadline, createScheduleBlock, deleteDeadline, deleteScheduleBlock, updateDeadline, updateScheduleBlock } from '../backendApi'
 import { defaultRepeatUntil, draftToCreatePayload, expandRepeatDates, keyOf, parseKey, repeatOptions, repeatSummary, shortDateLabel, weekdayOptions } from '../data/scheduleRepeat'
@@ -114,7 +115,8 @@ function DeadlineDayHead({ items, onOpen, onRemove, onToggle }) {
 }
 
 export default function SchedulePage() {
-  const [roadmaps] = useStoredState('nhip-hoc-roadmaps', [])
+  // Lộ trình hiển thị trong lịch: login -> server, chưa login -> local cũ.
+  const { roadmaps } = useRoadmaps()
   const [view, setView] = useState('month')
   const [anchor, setAnchor] = useState(() => new Date())
   const [composer, setComposer] = useState(false)
@@ -566,8 +568,8 @@ function MonthView({ anchor, eventMap, deadlineMap, onSelect, onOpen, onOpenDead
   const start = startOfWeek(first)
   const dates = Array.from({ length: 42 }, (_, i) => { const date = new Date(start); date.setDate(start.getDate() + i); return date })
   const all = dates.flatMap(date => eventMap[keyOf(date)] || [])
-  const startHour = Math.min(7, ...all.map(event => Math.floor(minutes(event.start) / 60)))
-  const endHour = Math.max(22, ...all.map(event => Math.ceil(minutes(event.end) / 60)))
+  const startHour = Math.min(1, ...all.map(event => Math.floor(minutes(event.start) / 60)))
+  const endHour = Math.max(24, ...all.map(event => Math.ceil(minutes(event.end) / 60)))
   return (
     <div className="month-calendar month-timed">
       <div className="weekday-row">{dayNames.map(day => <b key={day}>{day}</b>)}</div>
@@ -620,8 +622,8 @@ function DayView({ anchor, ...props }) {
 
 function TimeCalendar({ dates, eventMap, deadlineMap, onAdd, onRemove, onOpen, onOpenDeadline, onRemoveDeadline, onToggleDeadline }) {
   const all = dates.flatMap(date => eventMap[keyOf(date)] || [])
-  const startHour = Math.min(7, ...all.map(event => Math.floor(minutes(event.start) / 60)))
-  const endHour = Math.max(22, ...all.map(event => Math.ceil(minutes(event.end) / 60)))
+  const startHour = Math.min(1, ...all.map(event => Math.floor(minutes(event.start) / 60)))
+  const endHour = Math.max(24, ...all.map(event => Math.ceil(minutes(event.end) / 60)))
   const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i)
   return (
     <div className="timeline-scroll">
@@ -811,7 +813,7 @@ function EventEditor({ event, initial, scope, setScope, seriesCount, canEditRule
       <form onSubmit={submit}>
         {inSeries && <div className="scope-switch" role="radiogroup" aria-label="Phạm vi sửa"><button type="button" aria-pressed={scope === 'single'} className={scope === 'single' ? 'active' : ''} onClick={() => setScope('single')}>Chỉ buổi này ({shortDateLabel(event.date)})</button><button type="button" aria-pressed={scope === 'series'} className={scope === 'series' ? 'active' : ''} onClick={() => setScope('series')}>Cả chuỗi ({seriesCount} buổi)</button></div>}
         <label>Tên buổi học<input autoFocus required maxLength={160} value={draftValue.title} onChange={e => setDraftValue({ ...draftValue, title: e.target.value })} /></label>
-        <label>Môn học<input maxLength={80} list="schedule-subjects-edit" value={draftValue.subject || ''} onChange={e => setDraftValue({ ...draftValue, subject: e.target.value })} placeholder="Ví dụ: Toán, Ngữ văn, Tiếng Anh" /><datalist id="schedule-subjects-edit">{[...new Set([...subjects, 'Toán', 'Ngữ văn', 'Tiếng Anh'])].map(subject => <option key={subject} value={subject} />)}</datalist></label>
+        <label>Môn học<input maxLength={80} list="schedule-subjects-edit" value={draftValue.subject || ''} onChange={e => setDraftValue({ ...draftValue, subject: e.target.value })} placeholder="Ví dụ: Toán, Ngữ văn, Tiếng Anh" /><datalist id="schedule-subjects-edit">{[...new Set([...subjects, ...SCHOOL_SUBJECTS])].map(subject => <option key={subject} value={subject} />)}</datalist></label>
         <label>Ngày<input required type="date" value={draftValue.date} disabled={scope === 'series' && !canEditRule} onChange={e => setDraftValue({ ...draftValue, date: e.target.value })} /></label>
         <div className="composer-times"><label>Bắt đầu<input required type="time" value={draftValue.start} onChange={e => setDraftValue({ ...draftValue, start: e.target.value })} /></label><label>Kết thúc<input required type="time" value={draftValue.end} onChange={e => setDraftValue({ ...draftValue, end: e.target.value })} /></label></div>
         <label>Màu lịch<select value={draftValue.tone} onChange={e => setDraftValue({ ...draftValue, tone: e.target.value })}>{palette.map(tone => <option key={tone}>{tone}</option>)}</select></label>
@@ -835,7 +837,7 @@ function EventComposer({ draft, setDraft, onClose, onSave, error }) {
         <label>Tên buổi học<input autoFocus required maxLength={160} value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} /></label>
         <label>Môn học
           <input maxLength={80} list="schedule-subjects" value={draft.subject || ''} onChange={event => setDraft({ ...draft, subject: event.target.value })} placeholder="Ví dụ: Toán, Ngữ văn, Tiếng Anh" />
-          <datalist id="schedule-subjects">{[...new Set([...subjects, 'Toán', 'Ngữ văn', 'Tiếng Anh'])].map(subject => <option key={subject} value={subject} />)}</datalist>
+          <datalist id="schedule-subjects">{[...new Set([...subjects, ...SCHOOL_SUBJECTS])].map(subject => <option key={subject} value={subject} />)}</datalist>
         </label>
         <label>Ngày
           <input

@@ -54,7 +54,7 @@ Góc học tập mở bằng ngày hiện tại và lời chào. Trang sổ gợ
 
 Ba số liệu chính là việc chưa hoàn thành, hạn nộp trong bảy ngày tới và phút tập trung hôm nay. Số phút tính từ các phiên 25 phút đã hoàn thành; không tính thời gian đang chạy hoặc phiên nghỉ. Tiến độ lấy từ các việc đã đánh dấu xong. Không hiển thị chuỗi học hoặc XP giả định.
 
-Lịch hôm nay và trang Lịch học dùng chung dữ liệu: lịch tự thêm, bài trong lộ trình và hạn nộp. Hạn nộp hiển thị giờ nộp. Biểu mẫu dùng ngày/tháng/năm theo ngữ cảnh tiếng Việt, giờ 24 tiếng, tên môn quen thuộc. Trường môn học cho phép gõ tên riêng và gợi ý Toán, Ngữ văn, Tiếng Anh; đây là gợi ý, không phải danh mục chương trình bắt buộc.
+Lịch hôm nay và trang Lịch học dùng chung dữ liệu: lịch tự thêm, bài trong lộ trình và hạn nộp. Hạn nộp hiển thị giờ nộp. Biểu mẫu dùng ngày/tháng/năm theo ngữ cảnh tiếng Việt, giờ 24 tiếng, tên môn quen thuộc. Trường môn học cho phép gõ tên riêng và gợi ý 12 môn trong SCHOOL_SUBJECTS (Toán, Ngữ văn, Tiếng Anh, Vật lí, Hóa học, Sinh học, Lịch sử, Địa lí, Khoa học tự nhiên, Tin học, Công nghệ, GDCD — xem frontend/src/data/subjects.js, mirror backend/subjects.py); đây là gợi ý, không phải danh mục chương trình bắt buộc. Phòng tập trung dùng 12 nhãn khóa cứng tương ứng (tên ngắn Lí/Hoá/Văn/Sử/Địa/Tin/KHTN/GDCD + Dự án cho hoạt động ngoài môn học), khớp CHECK trong Supabase.
 
 Hồ sơ cho chọn lớp 6–9 trong nhóm THCS, lớp 10–12 trong nhóm THPT. Lớp đã lưu xuất hiện đồng nhất ở thanh trên, hồ sơ bên trái và trang sổ. Chưa chọn lớp thì mời chọn, không mặc định mọi người là học sinh THPT. Hiện tại lớp là thông tin hồ sơ; chưa tự thay nội dung hay chương trình học theo lớp.
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import AppShell from './components/AppShell'
 import AuthPage from './pages/AuthPage'
-import { displayUser, getSession, initSessionSync, logoutUser, onSessionChange } from './backendApi'
+import { displayUser, fetchOnboardingStatus, fetchPreferences, getSession, initSessionSync, logoutUser, onSessionChange } from './backendApi'
 import './styles/app-shell.css'
 import './styles/shared-components.css'
 import './styles/schedule.css'
@@ -23,8 +23,11 @@ import FriendsPage from './pages/FriendsPage'
 import SettingsPage from './pages/SettingsPage'
 import HelpPage from './pages/HelpPage'
 import GoalsPage from './pages/GoalsPage'
+import OnboardingPage from './pages/OnboardingPage'
 import './styles/goals.css'
+import './styles/onboarding.css'
 import './styles/student-design.css'
+import { applySettings, loadSettings, persistSettings } from './data/settings'
 
 const pageMap = {
   dashboard: DashboardPage,
@@ -49,9 +52,14 @@ export default function App() {
   const [route, setRoute] = useState(initialRoute)
   const [session, setSession] = useState(getSession)
   const [sessionReady, setSessionReady] = useState(false)
+  const [onboarding, setOnboarding] = useState(null)
+  const [onboardingLoading, setOnboardingLoading] = useState(false)
   const [requestedPage, section] = route.split('/')
+  const sessionUserId = session?.user?.id
   const authPage = ['auth', 'login', 'register', 'forgot', 'landing'].includes(requestedPage)
   const page = session ? (authPage ? 'dashboard' : requestedPage) : (requestedPage === 'register' ? 'register' : requestedPage === 'forgot' ? 'forgot' : 'login')
+  // Route chi tiết lộ trình: #roadmap/:id -> vẫn dùng RoadmapPage nhưng truyền detailId.
+  const roadmapDetailId = requestedPage === 'roadmap' ? section : null
 
   useEffect(() => {
     const stopSync = initSessionSync()
@@ -74,13 +82,46 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
 
+  // Onboarding bắt buộc: đã đăng nhập mà thiếu lớp / <3 goals / chưa có preferences
+  // thì chặn toàn bộ app cho tới khi xong. Thoát giữa chừng -> lần sau vào lại
+  // status.next_step vẫn thiếu nên hiện lại đúng bước dở.
+  useEffect(() => {
+    if (!sessionReady || !session) {
+      setOnboarding(null)
+      return
+    }
+    let cancelled = false
+    setOnboardingLoading(true)
+    fetchOnboardingStatus()
+      .then((fresh) => { if (!cancelled) setOnboarding(fresh) })
+      .catch(() => { if (!cancelled) setOnboarding({ completed: true }) })
+      .finally(() => { if (!cancelled) setOnboardingLoading(false) })
+    return () => { cancelled = true }
+  }, [sessionReady, sessionUserId])
+  // Áp theme/color từ server ngay khi vừa đăng nhập, không đợi vào SettingsPage.
+  // Trước đây chỉ main.jsx apply local 1 lần + SettingsPage mới fetch server,
+  // nên mỗi lần reload đều hiện sai theme cho tới khi bấm vào Cài đặt.
+  useEffect(() => {
+    if (!sessionReady || !session) return
+    let cancelled = false
+    fetchPreferences()
+      .then((remote) => {
+        if (cancelled || !remote) return
+        const merged = { ...loadSettings(), ...remote }
+        persistSettings(merged)
+        applySettings(merged)
+      })
+      .catch(() => { /* giữ bản local khi chưa có preferences / lỗi mạng */ })
+    return () => { cancelled = true }
+  }, [sessionReady, sessionUserId])
+
   useEffect(() => {
     const title = ({ login: 'Đăng nhập', register: 'Đăng ký', forgot: 'Quên mật khẩu' })[page] || [...navigationItems, ...utilityItems].find((item) => item.path === page)?.label
-    document.title = (title || 'Không tìm thấy trang') + ' · Nhịp Học'
-    if (section) document.getElementById(section)?.scrollIntoView({ block: 'start' })
-    else window.scrollTo({ top: 0, behavior: 'instant' })
+    document.title = ((roadmapDetailId ? 'Chi tiết lộ trình' : title) || 'Không tìm thấy trang') + ' · Nhịp Học'
+    if (section && !roadmapDetailId) document.getElementById(section)?.scrollIntoView({ block: 'start' })
+    else if (!roadmapDetailId) window.scrollTo({ top: 0, behavior: 'instant' })
     document.querySelector('main')?.focus({ preventScroll: true })
-  }, [page, section])
+  }, [page, section, roadmapDetailId])
 
   const navigate = (nextPage) => {
     setRoute(nextPage)
@@ -89,23 +130,35 @@ export default function App() {
 
   async function handleLogout() {
     await logoutUser()
+    setOnboarding(null)
     navigate('login')
   }
 
   if (!sessionReady) return <main className="auth-page"><p>Đang tải…</p></main>
   if (!session) return <AuthPage key={page} mode={page} onNavigate={navigate} />
+  if (onboardingLoading) return <main className="auth-page"><p>Đang kiểm tra onboarding…</p></main>
+  if (onboarding && !onboarding.completed) {
+    return <OnboardingPage initialStatus={onboarding} onLogout={handleLogout} onDone={(fresh) => { setOnboarding(fresh?.completed ? fresh : { completed: true }); navigate('dashboard') }} />
+  }
 
   const Page = pageMap[page]
+  // Giữ Phòng tập trung luôn mounted (ẩn bằng hidden khi ở page khác) để
+  // timer đếm nền: chuyển tab giữa các page không reset đồng hồ, hết giờ vẫn
+  // tự cộng phiên + lưu server đúng lúc. Nội dung ẩn nên không ảnh hưởng a11y.
+  const pomodoroHidden = page !== 'pomodoro'
   return (
     <AppShell currentPage={page} onNavigate={navigate} user={displayUser(session)} onLogout={handleLogout}>
-      {Page ? <Page onNavigate={navigate} /> : (
+      <div className="focus-keepalive" hidden={pomodoroHidden || undefined} aria-hidden={pomodoroHidden || undefined}>
+        <PomodoroPage onNavigate={navigate} />
+      </div>
+      {pomodoroHidden && (Page ? <Page onNavigate={navigate} detailId={roadmapDetailId} /> : (
         <section className="dashboard-card not-found">
           <span aria-hidden="true">🧭</span>
           <h1>Trang này hơi lạc nhịp rồi!</h1>
           <p>Quay lại không gian học tập để tiếp tục nhé.</p>
           <a className="primary-button" href="#dashboard">Về góc học tập</a>
         </section>
-      )}
+      ))}
     </AppShell>
   )
 }

@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     # Nếu để trống, backend sẽ verify token bằng cách gọi Supabase Auth API (chậm hơn nhưng vẫn an toàn).
     supabase_jwt_secret: str | None = Field(default=None, validation_alias="SUPABASE_JWT_SECRET")
     auto_confirm_email: bool = Field(default=False, validation_alias="AUTO_CONFIRM_EMAIL")
+    # OpenRouter (chat AI). Key chỉ nằm ở backend, không bao giờ lộ ra frontend.
+    openrouter_api_key: str | None = Field(default=None, validation_alias="OPENROUTER_API_KEY")
+    openrouter_model: str = Field(
+        default="nvidia/nemotron-3-super-120b-a12b:free",
+        validation_alias="OPENROUTER_MODEL",
+    )
+    openrouter_site_url: str | None = Field(default=None, validation_alias="OPENROUTER_SITE_URL")
+    openrouter_app_name: str | None = Field(default=None, validation_alias="OPENROUTER_APP_NAME")
 
     model_config = SettingsConfigDict(env_file=Path(__file__).resolve().parent / ".env", extra="ignore")
 
