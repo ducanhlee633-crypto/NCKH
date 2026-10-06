@@ -713,3 +713,115 @@ class RoadmapDetail(Roadmap):
 
     stages: list[RoadmapStage] = Field(default_factory=list)
     lessons: list[RoadmapLesson] = Field(default_factory=list)
+
+
+# ---------------- Weekly tasks (WeeklyTasksPage.jsx) ----------------
+# Kanban việc trong tuần: title + description + subject + date (nullable)
+# + priority (high|medium|low) + status (todo|doing|done).
+# date NULL = chưa hẹn ngày -> frontend luôn hiện (không lọc theo tuần).
+
+WEEKLY_TASK_STATUS_VALUES = ("todo", "doing", "done")
+WEEKLY_TASK_PRIORITY_VALUES = ("high", "medium", "low")
+
+
+class WeeklyTaskBase(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=500)
+    subject: str | None = Field(default=None, max_length=40)
+    date: va_date | None = None
+    priority: str = Field(default="medium", pattern=r"^(high|medium|low)$")
+    status: str = Field(default="todo", pattern=r"^(todo|doing|done)$")
+
+
+class WeeklyTaskCreate(WeeklyTaskBase):
+    pass
+
+
+class WeeklyTaskUpdate(BaseModel):
+    """PUT/PATCH /weekly-tasks/{id} — tất cả optional, chỉ cập nhật field được gửi."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    subject: str | None = Field(default=None, max_length=40)
+    date: va_date | None = None
+    priority: str | None = Field(default=None, pattern=r"^(high|medium|low)$")
+    status: str | None = Field(default=None, pattern=r"^(todo|doing|done)$")
+
+
+class WeeklyTask(BaseModel):
+    """Một việc trong tuần của chính mình."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    title: str
+    description: str = ""
+    subject: str | None = None
+    date: va_date | None = None
+    priority: str = "medium"
+    status: str = "todo"
+    created_at: datetime
+    updated_at: datetime
+
+
+# ---------------- Daily tasks (DashboardPage.jsx) ----------------
+# Việc cần làm hằng ngày: title + description + subject + task_date (bắt buộc)
+# + priority (high|medium|low) + done (bool checkbox) + position (thứ tự tay).
+# task_date bắt buộc để Dashboard lọc "hôm nay" / ngày khác.
+# done bool (không dùng todo/doing/done như weekly) để tương thích
+# local cũ `nhip-hoc-tasks` {id,title,done}.
+
+DAILY_TASK_PRIORITY_VALUES = ("high", "medium", "low")
+
+
+class DailyTaskBase(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=500)
+    subject: str | None = Field(default=None, max_length=40)
+    task_date: va_date
+    priority: str = Field(default="medium", pattern=r"^(high|medium|low)$")
+    done: bool = False
+    position: int = Field(default=0, ge=0, le=10000)
+
+
+class DailyTaskCreate(DailyTaskBase):
+    pass
+
+
+class DailyTaskUpdate(BaseModel):
+    """PUT/PATCH /daily-tasks/{id} — tất cả optional, chỉ cập nhật field được gửi."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=500)
+    subject: str | None = Field(default=None, max_length=40)
+    task_date: va_date | None = None
+    priority: str | None = Field(default=None, pattern=r"^(high|medium|low)$")
+    done: bool | None = None
+    position: int | None = Field(default=None, ge=0, le=10000)
+
+
+class DailyTask(BaseModel):
+    """Một việc hằng ngày của chính mình."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    title: str
+    description: str = ""
+    subject: str | None = None
+    task_date: va_date
+    priority: str = "medium"
+    done: bool = False
+    position: int = 0
+    created_at: datetime
+    updated_at: datetime

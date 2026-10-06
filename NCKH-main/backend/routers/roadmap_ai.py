@@ -195,6 +195,9 @@ def _request_json(client, model, prompt, tokens, validate, deadline):
             completion = client.chat.completions.create(
                 model=model, messages=messages, temperature=0.35, max_tokens=tokens,
                 stream=False, timeout=min(60.0, remaining),
+                # Như chat: model reasoning ăn chung budget max_tokens.
+                # Ép effort=low để dành chỗ cho JSON lộ trình.
+                extra_body={"reasoning": {"effort": "low", "exclude": True}},
             )
         except Exception as error:
             code = getattr(error, "status_code", None)

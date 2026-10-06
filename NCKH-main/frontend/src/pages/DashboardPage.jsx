@@ -1,12 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Modal from '../components/Modal'
 import Icon from '../components/Icon'
 import useStoredState from '../data/useStoredState'
 import useScheduleBlocks from '../data/useScheduleBlocks'
 import useDeadlines from '../data/useDeadlines'
 import useRoadmaps from '../data/useRoadmaps'
+import useDailyTasks from '../data/useDailyTasks'
 import { CardHeader, EmptyState, ProgressBar } from '../components/PageComponents'
-import { createDeadline, displayUser, fetchPomodoroSessions, getSession, onSessionChange, updateDeadline } from '../backendApi'
+import {
+  createDailyTask,
+  createDeadline,
+  deleteDailyTask,
+  displayUser,
+  fetchPomodoroSessions,
+  getSession,
+  onSessionChange,
+  patchDailyTask,
+  updateDailyTask,
+  updateDeadline,
+} from '../backendApi'
 import { gradeLabel } from '../data/settings'
 import { calendarEvents } from '../data/calendar'
 
@@ -16,6 +28,16 @@ const deadlineTimeOf = item => String(item?.time || item?.due_time || item?.end 
 const deadlineStatusOf = item => !!item?.status
 const deadlinePriorityOf = item => (item?.priority === 'high' || item?.priority === 'low' ? item.priority : 'medium')
 const PRIORITY_LABEL_DASH = { high: 'Cao', medium: 'Trung bình', low: 'Thấp' }
+
+// --- Daily tasks (bảng daily_tasks): chuẩn hóa cả shape local cũ {id,title,done} ---
+const dailyDateOf = item => String(item?.date || item?.task_date || '').slice(0, 10)
+const dailyDoneOf = item => !!item?.done
+const dailyPriorityOf = item => (item?.priority === 'high' || item?.priority === 'low' ? item.priority : 'medium')
+const dailySubjectOf = item => String(item?.subject || '')
+const dailyDescOf = item => String(item?.description || '')
+const dailyPositionOf = item => (Number.isInteger(item?.position) ? item.position : Number(item?.position) || 0)
+const DAILY_PRIORITY_WEIGHT = { high: 0, medium: 1, low: 2 }
+const DAILY_PRIORITY_OPTIONS = [['high', 'Cao'], ['medium', 'Trung bình'], ['low', 'Thấp']]
 
 // Ngày local của 1 phiên Pomodoro (dùng started_at). Server lọc theo ngày UTC nên
 // phiên sáng sớm giờ VN (UTC+7) có thể rơi sang hôm trước — phải lọc lại local ở đây
@@ -42,7 +64,16 @@ function localMinutesOf(focus, todayKey) {
 }
 
 export default function DashboardPage({ onNavigate }) {
-  const [tasks, saveTasks, error] = useStoredState('nhip-hoc-tasks', [])
+  // Việc cần làm hằng ngày: login -> server (daily_tasks), chưa login -> localStorage `nhip-hoc-tasks`.
+  const {
+    tasks, loggedIn: dailyLoggedIn, loadingTasks,
+    serverRows: dailyRows, setServerRows: setDailyRows,
+    setLocalTasks: saveDailyLocal, localError: dailyLocalError,
+    syncError: dailySyncError, setSyncError: setDailySyncError,
+  } = useDailyTasks()
+  const [taskError, setTaskError] = useState('')
+  const [savingTask, setSavingTask] = useState(false)
+  const [composer, setComposer] = useState(null) // { mode: 'create'|'edit', draft }
   const { deadlines, loggedIn: deadlineLoggedIn, serverRows: deadlineRows, setServerRows: setDeadlineRows, setLocalDeadlines: saveDeadlines, localError: deadlineLocalError } = useDeadlines()
   const [deadlineError, setDeadlineError] = useState('')
   const [profile] = useStoredState('nhip-hoc-settings', {})
@@ -119,26 +150,289 @@ export default function DashboardPage({ onNavigate }) {
   }, [])
   const [showDeadline, setShowDeadline] = useState(false)
   const [title, setTitle] = useState('')
+  const [quickDate, setQuickDate] = useState(() => dateKey(new Date()))
+  const [quickPriority, setQuickPriority] = useState('medium')
   const [filter, setFilter] = useState('all')
+  const [dayScope, setDayScope] = useState('today')
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [query, setQuery] = useState('')
   const [now, setNow] = useState(() => new Date())
   useEffect(() => { const timer = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(timer) }, [])
   const today = dateKey(now)
-  const completed = tasks.filter(task => task.done).length
-  const remaining = tasks.length - completed
-  const nextTask = tasks.find(task => !task.done)
+
+  // Lọc theo ngày: 'today' (mặc định, task thiếu ngày coi như hôm nay để không mất local cũ),
+  // 'all' (mọi ngày). Sắp xếp: ưu tiên cao -> position tay -> tên.
+  const dayTasks = useMemo(() => (Array.isArray(tasks) ? tasks : []).filter(task => {
+    if (dayScope === 'all') return true
+    return (dailyDateOf(task) || today) === today
+  }), [tasks, dayScope, today])
+  const completed = dayTasks.filter(task => dailyDoneOf(task)).length
+  const remaining = dayTasks.length - completed
+  const nextTask = useMemo(() => {
+    const open = dayTasks.filter(task => !dailyDoneOf(task))
+    open.sort((a, b) => {
+      const p = (DAILY_PRIORITY_WEIGHT[dailyPriorityOf(a)] ?? 1) - (DAILY_PRIORITY_WEIGHT[dailyPriorityOf(b)] ?? 1)
+      if (p !== 0) return p
+      return dailyPositionOf(a) - dailyPositionOf(b)
+    })
+    return open[0]
+  }, [dayTasks])
   const upcoming = deadlines.filter(item => { if (deadlineStatusOf(item)) return false; const day = deadlineDateOf(item); if (!day) return false; const due = new Date(day + 'T' + deadlineTimeOf(item)); return due >= now && due.getTime() <= now.getTime() + 7 * 86400000 }).sort((a, b) => (deadlineDateOf(a) + deadlineTimeOf(a)).localeCompare(deadlineDateOf(b) + deadlineTimeOf(b)))
   const localFocusMinutes = localMinutesOf(focus, today)
   // Đã đăng nhập: lấy max(server, local) để không tụt số trong lúc phiên mới
   // vừa xong local nhưng POST server chưa kịp về; chưa đăng nhập: chỉ dùng local.
   const focusMinutesToday = hasSession ? Math.max(serverFocusMinutes ?? 0, localFocusMinutes) : localFocusMinutes
   const week = Array.from({ length: 7 }, (_, index) => { const day = new Date(now); day.setDate(day.getDate() - (day.getDay() + 6) % 7 + index); return day })
-  const visibleTasks = tasks.filter(task => filter === 'all' || (filter === 'done' ? task.done : !task.done))
+  const visibleTasks = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const list = dayTasks.filter(task => {
+      if (filter === 'done' && !dailyDoneOf(task)) return false
+      if (filter === 'todo' && dailyDoneOf(task)) return false
+      if (priorityFilter !== 'all' && dailyPriorityOf(task) !== priorityFilter) return false
+      if (q && !((task.title || '').toLowerCase().includes(q) || dailyDescOf(task).toLowerCase().includes(q) || dailySubjectOf(task).toLowerCase().includes(q))) return false
+      return true
+    })
+    list.sort((a, b) => {
+      const p = (DAILY_PRIORITY_WEIGHT[dailyPriorityOf(a)] ?? 1) - (DAILY_PRIORITY_WEIGHT[dailyPriorityOf(b)] ?? 1)
+      if (p !== 0) return p
+      const pos = dailyPositionOf(a) - dailyPositionOf(b)
+      if (pos !== 0) return pos
+      return String(a.title || '').localeCompare(String(b.title || ''), 'vi')
+    })
+    return list
+  }, [dayTasks, filter, priorityFilter, query])
   const calendar = calendarEvents(events, roadmaps, deadlines)
   const lessonsToday = calendar[today] || []
   const taskInput = () => document.getElementById('new-task')?.focus()
-  function addTask(event) {
+
+  function nextPositionFor(date) {
+    const sameDay = (Array.isArray(tasks) ? tasks : []).filter(t => (dailyDateOf(t) || today) === date)
+    if (!sameDay.length) return 0
+    return Math.max(...sameDay.map(dailyPositionOf)) + 1
+  }
+
+  async function addTask(event) {
     event.preventDefault()
-    if (title.trim() && saveTasks([...tasks, { id: crypto.randomUUID(), title: title.trim(), done: false }])) { setTitle(''); setFilter('all') }
+    const name = title.trim()
+    if (!name) return
+    if (name.length > 160) { setTaskError('Tên việc tối đa 160 ký tự.'); return }
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(quickDate) ? quickDate : today
+    const priority = quickPriority === 'high' || quickPriority === 'low' ? quickPriority : 'medium'
+    setTaskError('')
+    const payload = { title: name, description: '', subject: '', task_date: day, date: day, priority, done: false, position: nextPositionFor(day) }
+    if (!dailyLoggedIn) {
+      if (saveDailyLocal([...(Array.isArray(tasks) ? tasks : []), { ...payload, id: crypto.randomUUID() }])) {
+        setTitle(''); setFilter('all')
+        if (day !== today) setDayScope('all')
+      }
+      return
+    }
+    if (dailyRows === null) { setTaskError('Đang tải việc từ server, thử lại sau giây lát.'); return }
+    const tempId = 'temp-' + Date.now()
+    setDailyRows(rows => [...(rows || []), {
+      id: tempId, user_id: 'local', title: payload.title, description: '', subject: null,
+      task_date: payload.task_date, priority: payload.priority, done: false, position: payload.position,
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    }])
+    setTitle(''); setFilter('all')
+    if (day !== today) setDayScope('all')
+    setDailySyncError('')
+    try {
+      const created = await createDailyTask(payload)
+      setDailyRows(rows => (rows || []).map(row => row.id === tempId ? created : row))
+    } catch (failure) {
+      setDailyRows(rows => (rows || []).filter(row => row.id !== tempId))
+      setTaskError(failure.friendlyMessage || 'Không lưu được việc lên server.')
+    }
+  }
+
+  async function toggleTask(id) {
+    if (!id) return
+    const target = (Array.isArray(tasks) ? tasks : []).find(item => item.id === id)
+    if (!target) return
+    const nextDone = !dailyDoneOf(target)
+    setTaskError('')
+    if (!dailyLoggedIn) {
+      saveDailyLocal((Array.isArray(tasks) ? tasks : []).map(item => item.id === id ? { ...item, done: nextDone } : item))
+      return
+    }
+    if (String(id).startsWith('temp-')) {
+      setDailyRows(rows => (rows || []).map(row => row.id === id ? { ...row, done: nextDone } : row))
+      return
+    }
+    const snapshot = dailyRows
+    setDailyRows(rows => (rows || []).map(row => row.id === id ? { ...row, done: nextDone } : row))
+    setDailySyncError('')
+    try {
+      const updated = await patchDailyTask(id, { done: nextDone })
+      setDailyRows(rows => (rows || []).map(row => row.id === updated.id ? updated : row))
+    } catch (failure) {
+      setDailyRows(snapshot)
+      setTaskError(failure.friendlyMessage || 'Không đổi được trạng thái việc.')
+    }
+  }
+
+  async function removeTask(id, titleText) {
+    if (!id) return
+    if (!window.confirm(`Xóa việc "${titleText || 'này'}"?`)) return
+    setTaskError('')
+    if (!dailyLoggedIn) {
+      saveDailyLocal((Array.isArray(tasks) ? tasks : []).filter(item => item.id !== id))
+      return
+    }
+    if (String(id).startsWith('temp-')) {
+      setDailyRows(rows => (rows || []).filter(row => row.id !== id))
+      return
+    }
+    const snapshot = dailyRows
+    setDailyRows(rows => (rows || []).filter(row => row.id !== id))
+    try {
+      await deleteDailyTask(id)
+    } catch (failure) {
+      setDailyRows(snapshot)
+      setTaskError(failure.friendlyMessage || 'Không xóa được việc trên server.')
+    }
+  }
+
+  async function moveTask(id, dir) {
+    // Đổi thứ tự tay trong ngày: hoán đổi position với task kề trên/dưới (cùng ngày).
+    const sorted = [...visibleTasks]
+    const idx = sorted.findIndex(t => t.id === id)
+    const other = sorted[idx + dir]
+    if (idx < 0 || !other) return
+    const current = sorted[idx]
+    const dateA = dailyDateOf(current) || today
+    const dateB = dailyDateOf(other) || today
+    if (dateA !== dateB) return // khác ngày thì không đổi chỗ
+    const posA = dailyPositionOf(current)
+    const posB = dailyPositionOf(other)
+    // Trường hợp position trùng nhau: gán lại theo index để tách.
+    const nextA = posA === posB ? posA + dir : posB
+    const nextB = posA === posB ? posB : posA
+    setTaskError('')
+    if (!dailyLoggedIn) {
+      saveDailyLocal((Array.isArray(tasks) ? tasks : []).map(item => {
+        if (item.id === current.id) return { ...item, position: nextA }
+        if (item.id === other.id) return { ...item, position: nextB }
+        return item
+      }))
+      return
+    }
+    if (String(id).startsWith('temp-') || String(other.id).startsWith('temp-')) {
+      setDailyRows(rows => (rows || []).map(row => {
+        if (row.id === current.id) return { ...row, position: nextA }
+        if (row.id === other.id) return { ...row, position: nextB }
+        return row
+      }))
+      return
+    }
+    const snapshot = dailyRows
+    setDailyRows(rows => (rows || []).map(row => {
+      if (row.id === current.id) return { ...row, position: nextA }
+      if (row.id === other.id) return { ...row, position: nextB }
+      return row
+    }))
+    try {
+      await patchDailyTask(current.id, { position: nextA })
+      await patchDailyTask(other.id, { position: nextB })
+    } catch (failure) {
+      setDailyRows(snapshot)
+      setTaskError(failure.friendlyMessage || 'Không đổi được thứ tự việc.')
+    }
+  }
+
+  function openCreateTask() {
+    setTaskError('')
+    setComposer({ mode: 'create', draft: { id: null, title: '', description: '', subject: '', date: today, priority: 'medium' } })
+  }
+
+  function openEditTask(task) {
+    setTaskError('')
+    setComposer({
+      mode: 'edit',
+      draft: {
+        id: task.id,
+        title: task.title || '',
+        description: dailyDescOf(task),
+        subject: dailySubjectOf(task),
+        date: dailyDateOf(task) || today,
+        priority: dailyPriorityOf(task),
+        done: dailyDoneOf(task),
+        position: dailyPositionOf(task),
+      },
+    })
+  }
+
+  async function saveComposer() {
+    const d = composer?.draft
+    if (!d) return
+    const name = String(d.title || '').trim()
+    if (!name) { setTaskError('Hãy nhập tên việc cần làm.'); return }
+    if (name.length > 160) { setTaskError('Tên việc tối đa 160 ký tự.'); return }
+    if (String(d.description || '').length > 500) { setTaskError('Mô tả tối đa 500 ký tự.'); return }
+    if (d.date && !/^\d{4}-\d{2}-\d{2}$/.test(d.date)) { setTaskError('Ngày chưa hợp lệ.'); return }
+    const payload = {
+      title: name,
+      description: String(d.description || '').trim(),
+      subject: String(d.subject || '').trim(),
+      task_date: d.date || today,
+      date: d.date || today,
+      priority: d.priority === 'high' || d.priority === 'low' ? d.priority : 'medium',
+      done: !!d.done,
+      position: composer.mode === 'edit' ? (Number.isInteger(d.position) ? d.position : 0) : nextPositionFor(d.date || today),
+    }
+    setSavingTask(true)
+    try {
+      if (!dailyLoggedIn) {
+        if (composer.mode === 'edit') {
+          const next = (Array.isArray(tasks) ? tasks : []).map(t => t.id === d.id ? { ...t, ...payload } : t)
+          if (saveDailyLocal(next)) setComposer(null)
+        } else {
+          const next = [...(Array.isArray(tasks) ? tasks : []), { ...payload, id: crypto.randomUUID() }]
+          if (saveDailyLocal(next)) {
+            setComposer(null)
+            if (payload.task_date !== today) setDayScope('all')
+          }
+        }
+        return
+      }
+      if (dailyRows === null) { setTaskError('Đang tải việc từ server, thử lại sau giây lát.'); return }
+      if (composer.mode === 'edit') {
+        const snapshot = dailyRows
+        setDailyRows(rows => (rows || []).map(row => row.id === d.id ? {
+          ...row, title: payload.title, description: payload.description,
+          subject: payload.subject || null, task_date: payload.task_date,
+          priority: payload.priority, done: payload.done,
+        } : row))
+        setDailySyncError(''); setComposer(null); setTaskError('')
+        try {
+          const updated = await updateDailyTask(d.id, { ...payload, position: d.position })
+          setDailyRows(rows => (rows || []).map(row => row.id === updated.id ? updated : row))
+        } catch (failure) {
+          setDailyRows(snapshot)
+          setTaskError(failure.friendlyMessage || 'Không sửa được việc trên server. Đã hoàn tác.')
+        }
+      } else {
+        const tempId = 'temp-' + Date.now()
+        setDailyRows(rows => [...(rows || []), {
+          id: tempId, user_id: 'local', title: payload.title, description: payload.description,
+          subject: payload.subject || null, task_date: payload.task_date,
+          priority: payload.priority, done: payload.done, position: payload.position,
+          created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        }])
+        setDailySyncError(''); setComposer(null); setTaskError('')
+        if (payload.task_date !== today) setDayScope('all')
+        try {
+          const created = await createDailyTask(payload)
+          setDailyRows(rows => (rows || []).map(row => row.id === tempId ? created : row))
+        } catch (failure) {
+          setDailyRows(rows => (rows || []).filter(row => row.id !== tempId))
+          setTaskError(failure.friendlyMessage || 'Không lưu được việc lên server. Đã hoàn tác.')
+        }
+      }
+    } finally {
+      setSavingTask(false)
+    }
   }
   function addDeadline(event) {
     event.preventDefault()
@@ -218,13 +512,59 @@ export default function DashboardPage({ onNavigate }) {
     <div className="content-grid student-dashboard-grid">
       <div className="primary-column">
         <section className="dashboard-card student-tasks" id="tasks">
-          <CardHeader icon={<Icon name="check" />} title="Việc cần làm" tone="violet" />
-          <div className="task-progress-copy"><span>{completed} / {tasks.length} việc đã hoàn thành</span><b>{tasks.length ? Math.round(completed / tasks.length * 100) : 0}%</b></div>
-          <ProgressBar value={tasks.length ? completed / tasks.length * 100 : 0} tone="violet" />
-          <div className="task-filters" aria-label="Lọc việc cần làm">{[['all', 'Tất cả'], ['todo', 'Chưa xong'], ['done', 'Đã xong']].map(([value, label]) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}</div>
-          {visibleTasks.length ? <div className="task-list">{visibleTasks.map(task => <div className={'task-item ' + (task.done ? 'is-complete' : '')} key={task.id}><label><input type="checkbox" checked={task.done} onChange={() => saveTasks(tasks.map(item => item.id === task.id ? { ...item, done: !item.done } : item))} /><span>{task.title}</span></label><button className="delete-button" aria-label={'Xóa ' + task.title} onClick={() => saveTasks(tasks.filter(item => item.id !== task.id))}>Xóa</button></div>)}</div> : <EmptyState icon={<Icon name="book" size={26} />} title={tasks.length ? 'Chưa có việc nào trong mục này.' : 'Bắt đầu với một bài tập hoặc một phần cần ôn.'} tone="violet" />}
-          <form className="quick-add" onSubmit={addTask}><label className="sr-only" htmlFor="new-task">Việc cần làm</label><input id="new-task" required maxLength={160} placeholder="Ví dụ: Ôn 10 từ vựng tiếng Anh" value={title} onChange={event => setTitle(event.target.value)} /><button><Icon name="plus" size={17} />Thêm việc</button></form>
-          {error && <p role="alert">{error}</p>}
+          <CardHeader icon={<Icon name="check" />} title="Việc cần làm" tone="violet" action="Chi tiết" onAction={openCreateTask} />
+          <div className="task-progress-copy"><span>{completed} / {dayTasks.length} việc đã hoàn thành{dayScope === 'today' ? ' hôm nay' : ''}</span><b>{dayTasks.length ? Math.round(completed / dayTasks.length * 100) : 0}%</b></div>
+          <ProgressBar value={dayTasks.length ? completed / dayTasks.length * 100 : 0} tone="violet" />
+          <div className="task-filters" aria-label="Phạm vi ngày">
+            {[['today', 'Hôm nay'], ['all', 'Tất cả']].map(([value, label]) => <button key={value} type="button" aria-pressed={dayScope === value} onClick={() => setDayScope(value)}>{label}</button>)}
+            <span style={{ flex: 1 }} />
+            <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Tìm việc…" aria-label="Tìm việc cần làm" style={{ minHeight: 40, border: '1px solid var(--line)', borderRadius: 8, padding: '0 10px', fontSize: 12, maxWidth: 150 }} />
+          </div>
+          <div className="task-filters" aria-label="Lọc việc cần làm">
+            {[['all', 'Tất cả'], ['todo', 'Chưa xong'], ['done', 'Đã xong']].map(([value, label]) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}
+            <span style={{ flex: 1 }} />
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' }}>Ưu tiên
+              <select value={priorityFilter} onChange={event => setPriorityFilter(event.target.value)} aria-label="Lọc theo ưu tiên" style={{ minHeight: 40, borderRadius: 8, border: '1px solid var(--line)', fontSize: 12 }}>
+                <option value="all">Tất cả</option>
+                {DAILY_PRIORITY_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+          </div>
+          {dailyLoggedIn && loadingTasks
+            ? <p role="status">Đang tải việc hằng ngày…</p>
+            : visibleTasks.length ? <div className="task-list">{visibleTasks.map((task, index) => {
+              const done = dailyDoneOf(task)
+              const priority = dailyPriorityOf(task)
+              const date = dailyDateOf(task) || today
+              const subject = dailySubjectOf(task)
+              const desc = dailyDescOf(task)
+              return <div className={'task-item ' + (done ? 'is-complete' : '')} key={task.id}>
+                <label><input type="checkbox" checked={done} onChange={() => toggleTask(task.id)} /><span>{task.title}</span></label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '0 0 auto', alignItems: 'flex-end' }}>
+                  <small style={{ fontSize: 11, color: 'var(--muted)' }}>
+                    {date === today ? 'Hôm nay' : date.split('-').reverse().slice(0, 2).join('/')} · {PRIORITY_LABEL_DASH[priority]}{subject ? ` · ${subject}` : ''}
+                  </small>
+                  {desc ? <small style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={desc}>{desc}</small> : null}
+                </div>
+                <div style={{ display: 'flex', gap: 4, flex: '0 0 auto' }}>
+                  <button type="button" className="delete-button" title="Lên trên" aria-label={'Đưa lên trên ' + task.title} disabled={index === 0} onClick={() => moveTask(task.id, -1)} style={{ padding: '7px 9px' }}>↑</button>
+                  <button type="button" className="delete-button" title="Xuống dưới" aria-label={'Đưa xuống dưới ' + task.title} disabled={index === visibleTasks.length - 1} onClick={() => moveTask(task.id, 1)} style={{ padding: '7px 9px' }}>↓</button>
+                  <button type="button" className="delete-button" aria-label={'Sửa ' + task.title} onClick={() => openEditTask(task)}>Sửa</button>
+                  <button type="button" className="delete-button" aria-label={'Xóa ' + task.title} onClick={() => removeTask(task.id, task.title)}>Xóa</button>
+                </div>
+              </div>
+            })}</div> : <EmptyState icon={<Icon name="book" size={26} />} title={dayTasks.length ? 'Chưa có việc nào trong mục này.' : (dayScope === 'today' ? 'Hôm nay chưa có việc nào. Thêm việc đầu tiên nhé.' : 'Bắt đầu với một bài tập hoặc một phần cần ôn.')} tone="violet" />}
+          <form className="quick-add" onSubmit={addTask}>
+            <label className="sr-only" htmlFor="new-task">Việc cần làm</label>
+            <input id="new-task" required maxLength={160} placeholder="Ví dụ: Ôn 10 từ vựng tiếng Anh" value={title} onChange={event => setTitle(event.target.value)} />
+            <input type="date" value={quickDate} onChange={event => setQuickDate(event.target.value)} aria-label="Ngày của việc" style={{ maxWidth: 150 }} />
+            <select value={quickPriority} onChange={event => setQuickPriority(event.target.value)} aria-label="Ưu tiên">
+              {DAILY_PRIORITY_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <button><Icon name="plus" size={17} />Thêm việc</button>
+          </form>
+          {(taskError || dailySyncError || dailyLocalError) && <p role="alert">{taskError || dailySyncError || dailyLocalError}</p>}
+          {!dailyLoggedIn && <p style={{ fontSize: 12, color: 'var(--muted)' }}>Chưa đăng nhập — việc chỉ lưu trên trình duyệt này. Đăng nhập để đồng bộ Supabase.</p>}
         </section>
         <section className="dashboard-card student-deadlines" id="deadlines">
           <CardHeader icon={<Icon name="schedule" />} title="Sắp đến hạn nộp" tone="orange" action="Thêm hạn nộp" onAction={() => setShowDeadline(true)} />
@@ -244,5 +584,19 @@ export default function DashboardPage({ onNavigate }) {
       </aside>
     </div>
     {showDeadline && <Modal title="Thêm hạn nộp" onClose={() => setShowDeadline(false)}><form onSubmit={addDeadline}><label>Tên bài tập<input name="title" required pattern=".*\S.*" maxLength={160} placeholder="Ví dụ: Nộp bài thuyết trình Ngữ văn" autoFocus /></label><label>Môn học<input name="subject" maxLength={80} placeholder="Ví dụ: Ngữ văn" /></label><label>Ngày nộp<input name="date" type="date" required /></label><label>Giờ nộp<input name="time" type="time" required defaultValue="23:59" /></label><label>Mức độ quan trọng<select name="priority" defaultValue="medium"><option value="high">Cao</option><option value="medium">Trung bình</option><option value="low">Thấp</option></select></label>{(deadlineError || deadlineLocalError) && <p role="alert">{deadlineError || deadlineLocalError}</p>}<div className="composer-actions"><button type="button" className="ghost-button" onClick={() => setShowDeadline(false)}>Hủy</button><button className="primary-button">Lưu hạn nộp</button></div></form></Modal>}
+    {composer && <Modal title={composer.mode === 'edit' ? 'Sửa việc cần làm' : 'Thêm việc chi tiết'} onClose={() => setComposer(null)}>
+      <form onSubmit={event => { event.preventDefault(); saveComposer() }}>
+        <label>Tên việc *<input autoFocus required maxLength={160} value={composer.draft.title} onChange={event => setComposer({ ...composer, draft: { ...composer.draft, title: event.target.value } })} placeholder="Ví dụ: Ôn 10 từ vựng tiếng Anh" /></label>
+        <label>Mô tả<textarea rows={3} maxLength={500} value={composer.draft.description} onChange={event => setComposer({ ...composer, draft: { ...composer.draft, description: event.target.value } })} placeholder="Ghi rõ làm gì, bao nhiêu, tiêu chí xong…" /></label>
+        <label>Môn học<input maxLength={40} value={composer.draft.subject} onChange={event => setComposer({ ...composer, draft: { ...composer.draft, subject: event.target.value } })} placeholder="Ví dụ: Toán, Tiếng Anh…" /></label>
+        <div className="composer-times">
+          <label>Ngày<input type="date" required value={composer.draft.date} onChange={event => setComposer({ ...composer, draft: { ...composer.draft, date: event.target.value } })} /></label>
+          <label>Mức ưu tiên<select value={composer.draft.priority} onChange={event => setComposer({ ...composer, draft: { ...composer.draft, priority: event.target.value } })}><option value="high">Cao</option><option value="medium">Trung bình</option><option value="low">Thấp</option></select></label>
+        </div>
+        {composer.mode === 'edit' && <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={!!composer.draft.done} onChange={event => setComposer({ ...composer, draft: { ...composer.draft, done: event.target.checked } })} />Đã hoàn thành</label>}
+        {taskError && <p role="alert">{taskError}</p>}
+        <div className="composer-actions"><button type="button" className="ghost-button" onClick={() => setComposer(null)}>Hủy</button><button className="primary-button" disabled={savingTask}>{savingTask ? 'Đang lưu…' : (composer.mode === 'edit' ? 'Lưu thay đổi' : 'Thêm việc')}</button></div>
+      </form>
+    </Modal>}
   </>
 }

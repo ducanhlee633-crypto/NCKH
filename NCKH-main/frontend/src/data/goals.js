@@ -4,12 +4,11 @@ export function readGoals() {
     ...goal,
     id: goal.id || `goal-${index}`,
     status: goal.status === 'completed' ? 'completed' : 'in_progress',
-    progress: Number.isFinite(Number(goal.progress)) ? Math.max(0, Math.min(100, Number(goal.progress))) : 0,
   })) : []
 }
 
 export function addGoal(goal) {
   localStorage.setItem('nhip-hoc-goals', JSON.stringify([...readGoals(), {
-    ...goal, id: crypto.randomUUID(), progress: 0, status: 'in_progress',
+    ...goal, id: crypto.randomUUID(), status: 'in_progress',
   }]))
 }

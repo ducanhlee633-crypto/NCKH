@@ -294,7 +294,7 @@ export default function RoadmapPage({ onNavigate, detailId }) {
       const result = await generateRoadmapPlan({
         subject: draft.subject.trim(), context: draft.context.trim(), totalSessions: checked.slots.length,
         goalTitle: selectedGoal?.title || draft.title.trim(),
-        goalDetails: selectedGoal ? { targetScore: selectedGoal.targetScore ?? null, deadline: selectedGoal.date || null, progress: selectedGoal.progress || 0 } : null,
+        goalDetails: selectedGoal ? { targetScore: selectedGoal.targetScore ?? null, deadline: selectedGoal.date || null } : null,
         duration: Number(draft.duration), sessionsPerWeek: Number(draft.sessionsPerWeek),
         startDate: draft.startDate, endDate: draft.endDate, studyDays: draft.studyDays, notes: draft.notes.trim(),
         learnerProfile: { grade: draft.grade ? Number(draft.grade) : null, level: draft.level,

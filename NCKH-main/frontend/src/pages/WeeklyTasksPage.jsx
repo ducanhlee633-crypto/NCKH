@@ -2,9 +2,14 @@ import { useMemo, useState } from 'react'
 import { PageIntro } from '../components/PageComponents'
 import Modal from '../components/Modal'
 import useStoredState from '../data/useStoredState'
+import useWeeklyTasks from '../data/useWeeklyTasks'
+import {
+  createWeeklyTask,
+  deleteWeeklyTask,
+  patchWeeklyTask,
+  updateWeeklyTask,
+} from '../backendApi'
 import { SCHOOL_SUBJECTS, defaultSubjects } from '../data/subjects'
-
-const STORAGE_KEY = 'nhip-hoc-weekly-tasks'
 
 const COLUMNS = [
   { id: 'todo', title: 'Cần làm', icon: '📝', hint: 'Việc mới trong tuần' },
@@ -69,10 +74,14 @@ function emptyDraft(anchorMonday, status = 'todo') {
 
 export default function WeeklyTasksPage() {
   const [anchor, setAnchor] = useState(() => new Date())
-  const [stored, setStored, localError] = useStoredState(STORAGE_KEY, null)
+  const {
+    loggedIn, loadingTasks, tasks: hookTasks, localTasks,
+    serverRows, setServerRows, setLocalTasks, localError, syncError, setSyncError,
+  } = useWeeklyTasks()
   const [subjects] = useStoredState('nhip-hoc-subjects', defaultSubjects)
   const [composer, setComposer] = useState(null) // { mode: 'create'|'edit', draft, targetColumn }
   const [formError, setFormError] = useState('')
+  const [saving, setSaving] = useState(false)
   const [dragOver, setDragOver] = useState(null)
   const [draggingId, setDraggingId] = useState(null)
   const [query, setQuery] = useState('')
@@ -84,13 +93,14 @@ export default function WeeklyTasksPage() {
   const mondayKey = keyOf(monday)
   const sundayKey = keyOf(sunday)
 
-  // Seed 1 lần khi chưa có dữ liệu (UI trước, chưa cần backend).
+  // Nguồn sự thật: đã login -> server; chưa login -> localStorage (null = seed mẫu 1 lần).
   const tasks = useMemo(() => {
-    if (stored === null) return seedForWeek(mondayKey)
-    return Array.isArray(stored) ? stored : []
-  }, [stored, mondayKey])
+    if (loggedIn) return Array.isArray(hookTasks) ? hookTasks : []
+    if (localTasks === null || localTasks === undefined) return seedForWeek(mondayKey)
+    return Array.isArray(localTasks) ? localTasks : []
+  }, [loggedIn, hookTasks, localTasks, mondayKey])
 
-  const persist = (next) => setStored(next)
+  const persistLocal = (next) => setLocalTasks(next)
 
   const weekTasks = useMemo(() => {
     return tasks.filter((t) => {
@@ -162,7 +172,7 @@ export default function WeeklyTasksPage() {
     })
   }
 
-  function saveComposer() {
+  async function saveComposer() {
     const d = composer?.draft
     if (!d) return
     const title = (d.title || '').trim()
@@ -180,30 +190,106 @@ export default function WeeklyTasksPage() {
       status: ['todo', 'doing', 'done'].includes(d.status) ? d.status : 'todo',
     }
 
-    if (composer.mode === 'edit') {
-      const next = tasks.map((t) => (t.id === d.id ? { ...t, ...payload } : t))
-      if (persist(next)) setComposer(null)
-    } else {
-      const next = [...tasks, { ...payload, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]
-      if (persist(next)) {
-        setComposer(null)
-        // Nhảy tới tuần chứa task vừa tạo để user thấy ngay.
-        if (payload.date && (payload.date < mondayKey || payload.date > sundayKey)) {
-          setAnchor(parseDay(payload.date))
+    if (!loggedIn) {
+      if (composer.mode === 'edit') {
+        const next = tasks.map((t) => (t.id === d.id ? { ...t, ...payload } : t))
+        if (persistLocal(next)) setComposer(null)
+      } else {
+        const next = [...tasks, { ...payload, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]
+        if (persistLocal(next)) {
+          setComposer(null)
+          // Nhảy tới tuần chứa task vừa tạo để user thấy ngay.
+          if (payload.date && (payload.date < mondayKey || payload.date > sundayKey)) {
+            setAnchor(parseDay(payload.date))
+          }
         }
       }
+      return
+    }
+
+    // Đã đăng nhập: lưu Supabase với optimistic UI.
+    if (serverRows === null) { setFormError('Đang tải việc từ server, thử lại sau giây lát.'); return }
+    setSaving(true)
+    try {
+      if (composer.mode === 'edit') {
+        const snapshot = serverRows
+        setServerRows(rows => (rows || []).map(row => row.id === d.id ? {
+          ...row, title: payload.title, description: payload.description,
+          subject: payload.subject || null, date: payload.date || null,
+          priority: payload.priority, status: payload.status,
+        } : row))
+        setSyncError(''); setComposer(null); setFormError('')
+        try {
+          const updated = await updateWeeklyTask(d.id, payload)
+          setServerRows(rows => (rows || []).map(row => row.id === updated.id ? updated : row))
+        } catch (failure) {
+          setServerRows(snapshot)
+          setSyncError(failure.friendlyMessage || 'Không sửa được việc trên server. Đã hoàn tác.')
+        }
+      } else {
+        const tempId = 'temp-' + Date.now()
+        const optimisticRow = {
+          id: tempId, user_id: 'local',
+          title: payload.title, description: payload.description,
+          subject: payload.subject || null, date: payload.date || null,
+          priority: payload.priority, status: payload.status,
+          created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        }
+        setServerRows(rows => [...(rows || []), optimisticRow])
+        setSyncError(''); setComposer(null); setFormError('')
+        try {
+          const created = await createWeeklyTask(payload)
+          setServerRows(rows => (rows || []).map(row => row.id === tempId ? created : row))
+          if (payload.date && (payload.date < mondayKey || payload.date > sundayKey)) {
+            setAnchor(parseDay(payload.date))
+          }
+        } catch (failure) {
+          setServerRows(rows => (rows || []).filter(row => row.id !== tempId))
+          setSyncError(failure.friendlyMessage || 'Không lưu được việc lên server. Đã hoàn tác.')
+        }
+      }
+    } finally {
+      setSaving(false)
     }
   }
 
-  function removeTask(id) {
+  async function removeTask(id) {
     if (!id) return
     if (!window.confirm('Xóa việc này khỏi tuần?')) return
-    persist(tasks.filter((t) => t.id !== id))
+    if (!loggedIn) {
+      persistLocal(tasks.filter((t) => t.id !== id))
+      return
+    }
+    if (String(id).startsWith('temp-') || String(id).startsWith('seed-')) {
+      setServerRows(rows => (rows || []).filter(row => row.id !== id))
+      return
+    }
+    const snapshot = serverRows
+    setServerRows(rows => (rows || []).filter(row => row.id !== id))
+    try { await deleteWeeklyTask(id) }
+    catch (failure) { setServerRows(snapshot); setSyncError(failure.friendlyMessage || 'Không xóa được việc trên server.') }
   }
 
-  function moveTask(id, status) {
-    if (!['todo', 'doing', 'done'].includes(status)) return
-    persist(tasks.map((t) => (t.id === id ? { ...t, status } : t)))
+  async function moveTask(id, nextStatus) {
+    if (!['todo', 'doing', 'done'].includes(nextStatus)) return
+    if (!loggedIn) {
+      persistLocal(tasks.map((t) => (t.id === id ? { ...t, status: nextStatus } : t)))
+      return
+    }
+    if (String(id).startsWith('temp-')) {
+      setServerRows(rows => (rows || []).map(row => row.id === id ? { ...row, status: nextStatus } : row))
+      return
+    }
+    const snapshot = serverRows
+    setServerRows(rows => (rows || []).map(row => row.id === id ? { ...row, status: nextStatus } : row))
+    setSyncError('')
+    try {
+      const updated = await patchWeeklyTask(id, { status: nextStatus })
+      setServerRows(rows => (rows || []).map(row => row.id === updated.id ? updated : row))
+    } catch (failure) {
+      setServerRows(snapshot)
+      setSyncError(failure.friendlyMessage || 'Không đổi được trạng thái việc trên server. Đã hoàn tác.')
+    }
   }
 
   function stepTask(task, dir) {
@@ -238,6 +324,16 @@ export default function WeeklyTasksPage() {
 
   const allSubjects = [...new Set([...(subjects || []), ...SCHOOL_SUBJECTS, ...tasks.map((t) => t.subject).filter(Boolean)])]
 
+  const syncStatus = !loggedIn
+    ? 'Chưa đăng nhập — việc tuần này chỉ lưu trên trình duyệt này.'
+    : loadingTasks
+      ? 'Đang đồng bộ việc tuần này với server…'
+      : syncError
+        ? syncError
+        : serverRows
+          ? `Đã lưu việc tuần này lên server ✓ (${serverRows.length} việc)`
+          : ''
+
   return (
     <>
       <PageIntro
@@ -249,6 +345,7 @@ export default function WeeklyTasksPage() {
           <button className="primary-button" onClick={() => openCreate('todo')}>＋ Thêm việc</button>
         </div>
       </PageIntro>
+      {syncStatus && <p className="repeat-hint" role="status">{syncStatus}</p>}
 
       <div className="summary-grid weekly-stats">
         <div className="summary-chip blue"><span>TỔNG VIỆC TUẦN NÀY</span><b>{total}</b></div>
@@ -289,6 +386,7 @@ export default function WeeklyTasksPage() {
       </section>
 
       {localError && <p role="alert">{localError}</p>}
+      {loggedIn && loadingTasks && <p role="status">Đang tải việc trong tuần…</p>}
 
       <div className="weekly-board">
         {COLUMNS.map((col) => {
@@ -368,7 +466,7 @@ export default function WeeklyTasksPage() {
 
       <p className="repeat-hint weekly-hint">
         💡 Mẹo: kéo-thả thẻ qua cột để đổi trạng thái. Trên điện thoại dùng nút ← → trong thẻ.
-        Dữ liệu tuần này chỉ lưu trên trình duyệt (UI trước, chưa đồng bộ server).
+        {loggedIn ? ' Đã đăng nhập: việc lưu trên Supabase, đổi máy vẫn còn.' : ' Chưa đăng nhập: việc chỉ lưu trên trình duyệt này — đăng nhập để đồng bộ Supabase.'}
       </p>
 
       {composer && (
@@ -402,7 +500,7 @@ export default function WeeklyTasksPage() {
             {formError && <p role="alert">{formError}</p>}
             <div className="composer-actions">
               <button type="button" className="ghost-button" onClick={() => setComposer(null)}>Hủy</button>
-              <button className="primary-button">{composer.mode === 'edit' ? 'Lưu thay đổi' : 'Thêm việc'}</button>
+              <button className="primary-button" disabled={saving}>{saving ? 'Đang lưu…' : (composer.mode === 'edit' ? 'Lưu thay đổi' : 'Thêm việc')}</button>
             </div>
           </form>
         </Modal>

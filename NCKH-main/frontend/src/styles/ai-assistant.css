@@ -2,20 +2,98 @@
 .ai-banner { display: flex; align-items: center; gap: 15px; min-height: 135px; margin-bottom: 29px; padding: 30px 40px; color: #fff; background: linear-gradient(105deg,hsl(var(--accent-hue, 216) 93.3% 41.2%),hsl(var(--accent-hue, 216) 88.4% 62.9%)); border-radius: 34px; box-shadow: 0 12px 23px hsl(var(--accent-hue, 216) 68.3% 48.2% / 0.239); }.ai-orb { display: grid; place-items: center; width: 58px; height: 58px; background: #ffffff2d; border-radius: 50%; font-size: 28px; }.ai-banner p, .ai-banner b { display: block; margin: 0; }.ai-banner p { font-size: 19px; }.ai-banner b { margin-top: 3px; font-size: 20px; }.ai-banner > span { margin-left: auto; padding: 9px 14px; color: #eafff7; background: #ffffff22; border-radius: 22px; font-weight: 800; }.ai-banner > span + span { margin-left: 0; }.ai-banner .ai-tone-badge { background: #ffffff33; white-space: nowrap; }.ai-layout { display: grid; grid-template-columns: 265px minmax(0,1fr) 265px; gap: 22px; align-items: start; }.ai-left, .ai-right { display: flex; flex-direction: column; gap: 22px; }.new-chat { display: flex; align-items: center; justify-content: center; gap: 11px; min-height: 94px; color: #fff; background: var(--blue); border: 0; border-bottom: 4px solid var(--blue-dark); border-radius: 28px; font-size: 25px; }.new-chat span { font-size: 15px; font-weight: 800; }.style-list { display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }.style-list button { display: flex; align-items: center; gap: 10px; min-height: 51px; padding: 7px 12px; background: transparent; border: 0; border-radius: 25px; text-align: left; }.style-list button.selected { border: 2px solid var(--blue); background: hsl(var(--accent-hue, 216) 100.0% 96.7%); }.style-list i { display: grid; place-items: center; width: 31px; height: 31px; background: hsl(var(--accent-hue, 216) 100.0% 94.1%); border-radius: 50%; font-style: normal; }.style-list .mint i { background: #cdf7e4; }.style-list .gold i { background: #fff0bb; }.style-list b { flex: 1; font-size: 14px; }.style-list button > span { color: var(--blue); }.chat-empty, .upload-box { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; margin-top: 15px; padding: 16px; color: #7b889d; background: hsl(var(--accent-hue, 216) 75.0% 96.9%); border-radius: 28px; text-align: center; }.chat-empty > span { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 12px; color: hsl(var(--accent-hue, 216) 29.5% 79.4%); background: #fff; border-radius: 50%; font-size: 26px; }.chat-empty b { color: #53627b; font-size: 14px; }.chat-empty p { margin: 8px 0 0; font-size: 11px; line-height: 1.5; }.upload-box { min-height: 180px; }.upload-box > span { display: grid; place-items: center; width: 40px; height: 40px; color: var(--blue); background: #fff; border-radius: 50%; font-size: 22px; }.upload-box b { margin-top: 14px; font-size: 13px; }.upload-box small { margin-top: 6px; color: #8794a8; font-size: 10px; }.ai-chat { position: relative; display: flex; flex-direction: column; min-height: 780px; }.ai-greeting { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 110px; }.ai-avatar { display: grid; place-items: center; width: 76px; height: 76px; color: #fff; background: linear-gradient(hsl(var(--accent-hue, 216) 84.1% 55.7%),hsl(var(--accent-hue, 216) 87.9% 42.2%)); border-radius: 26px; box-shadow: 0 9px 13px hsl(var(--accent-hue, 216) 72.9% 50.8% / 0.271); font-size: 31px; }.ai-greeting > p { margin: 19px 0 27px; color: hsl(var(--accent-hue, 216) 32.8% 22.7%); font-size: 18px; font-weight: 800; }.prompt-grid { display: grid; grid-template-columns: repeat(2, minmax(180px,1fr)); gap: 12px; width: 100%; max-width: 500px; }.prompt-grid button { display: flex; align-items: center; gap: 10px; min-height: 68px; padding: 11px 15px; color: hsl(var(--accent-hue, 216) 33.9% 23.7%); background: hsl(var(--accent-hue, 216) 100.0% 96.9%); border: 0; border-radius: 34px; }.prompt-grid i { display: grid; place-items: center; width: 33px; height: 33px; color: var(--blue); background: hsl(var(--accent-hue, 216) 100.0% 93.1%); border-radius: 50%; font-style: normal; }.prompt-grid b { flex: 1; text-align: left; }.prompt-grid span { color: #8896ad; font-size: 22px; }.chat-composer { position: absolute; inset: auto 28px 26px; display: grid; grid-template-columns: auto auto 1fr auto auto; align-items: center; gap: 13px; padding: 9px 11px; background: hsl(var(--accent-hue, 216) 100.0% 96.9%); border: 2px solid hsl(var(--accent-hue, 216) 100.0% 93.1%); border-radius: 30px; }.chat-composer input { min-width: 0; padding: 12px 0; background: transparent; border: 0; outline: 0; font-size: 13px; }.chat-composer > span { color: #69778e; font-weight: 800; }.chat-composer > button { display: grid; place-items: center; width: 43px; height: 43px; color: #fff; background: var(--blue); border: 0; border-radius: 50%; font-size: 23px; }.chat-composer small { position: absolute; top: 58px; color: #8c99ab; font-size: 9px; }.chat-composer small:last-child { right: 0; }.level-summary { margin-top: 15px; padding: 14px; background: #fff8ea; border-radius: 25px; }.level-summary > b { float: right; padding: 8px; color: var(--blue); background: hsl(var(--accent-hue, 216) 100.0% 94.9%); border-radius: 50%; font-size: 11px; }.level-summary span { display: block; color: #8f6218; font-size: 15px; font-weight: 900; }.level-summary em { color: #8b96a9; font-size: 12px; font-style: normal; }.level-summary .progress-line { margin-top: 15px; background: #fff; }.ai-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }.ai-stat-grid div { display: flex; flex-direction: column; align-items: center; padding: 16px 8px; background: hsl(var(--accent-hue, 216) 100.0% 97.1%); border-radius: 25px; }.ai-stat-grid b { color: var(--blue); font-size: 19px; }.ai-stat-grid strong { margin-top: 4px; font: 800 24px 'Baloo 2'; }.ai-stat-grid span { color: #8290a4; font-size: 10px; text-align: center; }.notebook-empty { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding: 18px; color: #8c98aa; background: hsl(var(--accent-hue, 216) 100.0% 97.1%); border-radius: 25px; }.notebook-empty button { color: #9645dd; background: #fff; border: 0; border-radius: 18px; padding: 8px 11px; font-size: 11px; font-weight: 800; }.memory-box { display: flex; align-items: center; justify-content: space-between; margin-top: 15px; padding: 15px; color: #718098; background: hsl(var(--accent-hue, 216) 100.0% 97.1%); border: 1px solid hsl(var(--accent-hue, 216) 77.8% 91.2%); border-radius: 22px; font-size: 13px; }.memory-box button { padding: 9px 10px; color: #fff; background: var(--blue); border: 0; border-radius: 18px; font-size: 10px; font-weight: 900; }
 
 .ai-left .upload-box { width: 100%; border: 0; cursor: pointer; }
-.ai-item-list { display: grid; gap: 8px; margin-top: 12px; }
-.ai-item { display: flex; align-items: flex-start; gap: 8px; padding: 10px; background: hsl(var(--accent-hue, 216) 100.0% 97.1%); border-radius: 12px; min-width: 0; }
-.ai-item > span, .ai-history-title { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; font-size: 13px; }
+.ai-item-list { display: grid; gap: 10px; margin-top: 12px; }
+/* Mỗi session lịch sử là 1 card có khung riêng: viền + nền + bóng nhẹ, dễ phân biệt. */
+.ai-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 10px 10px 10px 12px; color: inherit; background: #fff; border: 1px solid hsl(var(--accent-hue, 216) 77.8% 91.2%); border-radius: 14px; box-shadow: 0 1px 2px hsl(var(--accent-hue, 216) 60% 50% / 0.06); transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+.ai-item:hover { border-color: hsl(var(--accent-hue, 216) 80% 78%); box-shadow: 0 3px 10px hsl(var(--accent-hue, 216) 60% 50% / 0.12); }
+.ai-item:has(.ai-history-title[aria-pressed="true"]) { border-color: var(--blue); border-left-width: 4px; background: hsl(var(--accent-hue, 216) 100% 96.5%); box-shadow: 0 3px 10px hsl(var(--accent-hue, 216) 60% 50% / 0.14); }
+.ai-item > span, .ai-history-title { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; line-height: 1.5; color: inherit; }
 .ai-item button { border: 0; background: transparent; color: var(--blue); cursor: pointer; }
-.ai-item .ai-history-title { text-align: left; }
-.ai-history-title[aria-pressed="true"] { font-weight: 800; }
+.ai-item .ai-history-title { text-align: left; font-weight: 600; cursor: pointer; border-radius: 8px; }
+.ai-item .ai-history-title:hover { text-decoration: underline; }
+.ai-item > button[aria-label="Xóa cuộc trò chuyện"] { flex-shrink: 0; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; font-size: 16px; line-height: 1; color: #9aa7bd; }
+.ai-item > button[aria-label="Xóa cuộc trò chuyện"]:hover { color: #b42318; background: #fef3f2; }
+.ai-item > button[aria-label="Xóa cuộc trò chuyện"]:disabled { opacity: .45; cursor: default; }
+.ai-history-title[aria-pressed="true"] { font-weight: 800; color: var(--blue); }
 .ai-messages { display: flex; flex-direction: column; gap: 16px; height: 630px; overflow-y: auto; padding: 10px 0 25px; }
-.ai-user-message { align-self: flex-end; max-width: 85%; padding: 12px 18px; background: hsl(var(--accent-hue, 216) 100.0% 96.9%); border-radius: 20px 20px 4px 20px; overflow-wrap: anywhere; }
-.ai-user-message small { color: #69778e; }
-.ai-user-message p { margin: 5px 0 0; white-space: pre-wrap; }
-.ai-assistant-message { align-self: flex-start; max-width: 85%; padding: 12px 18px; background: #fff; border: 1px solid hsl(var(--accent-hue, 216) 77.8% 91.2%); border-radius: 20px 20px 20px 4px; overflow-wrap: anywhere; }
+.ai-user-message { align-self: flex-end; max-width: 85%; padding: 12px 18px; color: #1c2a44; background: hsl(var(--accent-hue, 216) 100.0% 96.9%); border: 1px solid hsl(var(--accent-hue, 216) 77.8% 91.2%); border-radius: 20px 20px 4px 20px; overflow-wrap: anywhere; }
+.ai-user-message small { color: #69778e; font-weight: 800; }
+.ai-user-message p { margin: 5px 0 0; white-space: pre-wrap; color: inherit; }
+.ai-assistant-message { align-self: flex-start; max-width: 92%; padding: 14px 18px; color: #243145; background: #fff; border: 1px solid hsl(var(--accent-hue, 216) 77.8% 91.2%); border-radius: 20px 20px 20px 4px; overflow-wrap: anywhere; }
 .ai-assistant-message small { color: var(--blue); font-weight: 800; }
 .ai-assistant-message p { margin: 5px 0 0; white-space: pre-wrap; }
 .ai-assistant-message a, .ai-user-message a { color: var(--blue); font-weight: 700; overflow-wrap: anywhere; }
+.ai-assistant-message .md-body { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; min-width: 0; }
+/* Chữ kế thừa màu của bubble cha để sáng/tối đều tương phản (trắng trên đen, đen trên trắng). */
+.ai-assistant-message .md-p { margin: 0; white-space: normal; line-height: 1.7; font-size: 15px; color: inherit; }
+/* Tiêu đề trong tin nhắn AI — rõ cấp bậc */
+.ai-assistant-message .md-h { margin: 8px 0 2px; line-height: 1.4; color: inherit; overflow-wrap: anywhere; }
+.ai-assistant-message .md-h1 { font-size: 20px; font-weight: 800; padding-bottom: 6px; border-bottom: 2px solid hsl(var(--accent-hue, 216) 77.8% 91.2%); }
+.ai-assistant-message .md-h2 { font-size: 17.5px; font-weight: 800; }
+.ai-assistant-message .md-h2::before { content: "▎"; margin-right: 6px; color: var(--blue); }
+.ai-assistant-message .md-h3 { font-size: 16px; font-weight: 800; color: var(--blue); }
+.ai-assistant-message .md-h4 { font-size: 15px; font-weight: 800; }
+/* Danh sách */
+.ai-assistant-message .md-ul, .ai-assistant-message .md-ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 7px; line-height: 1.7; font-size: 15px; color: inherit; }
+.ai-assistant-message .md-ul { list-style: disc; }
+.ai-assistant-message .md-ol { list-style: decimal; }
+.ai-assistant-message .md-ul li::marker { color: var(--blue); font-weight: 800; }
+.ai-assistant-message .md-ol li::marker { color: var(--blue); font-weight: 800; }
+/* Bảng — nền sáng: header xanh chữ trắng, body trắng; nền tối: tự đổi sang tối */
+.ai-assistant-message .md-table-wrap { max-width: 100%; overflow-x: auto; background: #fff; border: 1px solid hsl(var(--accent-hue, 216) 77.8% 88%); border-radius: 12px; }
+.ai-assistant-message .md-table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.6; background: #fff; color: #243145; }
+.ai-assistant-message .md-table th { padding: 10px 12px; text-align: left; font-weight: 800; color: #fff; background: hsl(var(--accent-hue, 216) 85% 55%); white-space: nowrap; }
+.ai-assistant-message .md-table th + th { border-left: 1px solid #ffffff55; }
+.ai-assistant-message .md-table td { padding: 9px 12px; border-top: 1px solid hsl(var(--accent-hue, 216) 77.8% 91.2%); color: inherit; vertical-align: top; overflow-wrap: anywhere; }
+.ai-assistant-message .md-table td + td { border-left: 1px solid hsl(var(--accent-hue, 216) 77.8% 91.2%); }
+.ai-assistant-message .md-table tbody tr:nth-child(even) td { background: hsl(var(--accent-hue, 216) 100% 97.5%); }
+/* Code, quote, divider — bản sáng */
+.ai-assistant-message .md-code { padding: 2px 6px; font-size: 13.5px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #1c2a44; background: hsl(var(--accent-hue, 216) 100% 95.5%); border: 1px solid hsl(var(--accent-hue, 216) 77.8% 91.2%); border-radius: 6px; }
+/* Code block luôn nền đen chữ sáng cả 2 theme để dễ nhìn, thêm viền khi ở theme tối cho khỏi chìm. */
+.ai-assistant-message .md-pre { position: relative; margin: 0; padding: 14px 14px; background: #101c33; border: 1px solid transparent; border-radius: 12px; overflow-x: auto; }
+.ai-assistant-message .md-pre code { color: #eef3ff; font-size: 13.5px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
+.ai-assistant-message .md-pre-lang { position: absolute; top: 8px; right: 12px; font-size: 11px; color: #9db4dd; }
+.ai-assistant-message .md-quote { margin: 0; padding: 10px 14px; color: #3c4c68; background: hsl(var(--accent-hue, 216) 100% 96.9%); border-left: 4px solid var(--blue); border-radius: 0 12px 12px 0; font-size: 14.5px; line-height: 1.7; }
+.ai-assistant-message .md-hr { margin: 4px 0; border: 0; border-top: 1px dashed hsl(var(--accent-hue, 216) 40% 85%); }
+/* === Theme tối: đảo toàn bộ sang nền tối chữ sáng, giữ tương phản === */
+/* Dùng `body` để tăng specificity, thắng theme.css (theme.css load sau nên cùng specificity sẽ thắng). */
+/* Bubble người dùng: nền accent đậm + chữ trắng (khác hẳn bubble AI) để không bị trắng-trên-trắng. */
+html[data-theme="dark"] body .ai-user-message { color: #fff !important; background: hsl(var(--accent-hue, 216) 60% 36%) !important; background-image: none !important; border-color: hsl(var(--accent-hue, 216) 60% 50%) !important; box-shadow: 0 4px 14px rgba(0, 0, 0, .3) !important; }
+html[data-theme="dark"] body .ai-user-message small { color: rgba(255, 255, 255, .8) !important; }
+html[data-theme="dark"] body .ai-user-message p { color: #fff !important; }
+html[data-theme="dark"] body .ai-user-message a { color: #fff !important; text-decoration: underline; }
+/* Bubble AI: nền card + viền line + chữ trắng. */
+html[data-theme="dark"] body .ai-assistant-message { color: #fff !important; background: var(--card) !important; background-image: none !important; border-color: var(--line) !important; box-shadow: 0 4px 14px rgba(0, 0, 0, .3) !important; }
+html[data-theme="dark"] body .ai-assistant-message small { color: var(--blue) !important; }
+html[data-theme="dark"] body .ai-assistant-message p,
+html[data-theme="dark"] body .ai-assistant-message .md-p,
+html[data-theme="dark"] body .ai-assistant-message .md-h,
+html[data-theme="dark"] body .ai-assistant-message .md-ul,
+html[data-theme="dark"] body .ai-assistant-message .md-ol,
+html[data-theme="dark"] body .ai-assistant-message .md-ul li,
+html[data-theme="dark"] body .ai-assistant-message .md-ol li { color: #fff !important; }
+html[data-theme="dark"] body .ai-assistant-message a { color: var(--blue) !important; }
+/* Lịch sử trò chuyện: mỗi session là 1 card khung viền rõ ràng trên nền tối. */
+html[data-theme="dark"] body .ai-item { color: #fff !important; background: var(--card-2) !important; background-image: none !important; border: 1px solid var(--line) !important; box-shadow: 0 4px 12px rgba(0, 0, 0, .3) !important; }
+html[data-theme="dark"] body .ai-item:hover { border-color: hsl(var(--accent-hue, 216) 60% 55%) !important; }
+html[data-theme="dark"] body .ai-item:has(.ai-history-title[aria-pressed="true"]) { background: var(--card-2) !important; border-color: var(--blue) !important; border-left: 4px solid var(--blue) !important; }
+html[data-theme="dark"] body .ai-item .ai-history-title { color: #fff !important; }
+html[data-theme="dark"] body .ai-item .ai-history-title[aria-pressed="true"] { color: #fff !important; }
+html[data-theme="dark"] body .ai-item > button[aria-label="Xóa cuộc trò chuyện"] { color: rgba(255, 255, 255, .65) !important; }
+html[data-theme="dark"] body .ai-item > button[aria-label="Xóa cuộc trò chuyện"]:hover { color: #ff9aa2 !important; background: #512d34 !important; }
+html[data-theme="dark"] body .ai-item a { color: var(--blue) !important; }
+html[data-theme="dark"] .ai-assistant-message .md-h1 { border-bottom-color: var(--line); }
+html[data-theme="dark"] .ai-assistant-message .md-table-wrap { background: #182232; border-color: var(--line); }
+html[data-theme="dark"] .ai-assistant-message .md-table { background: #182232; color: var(--ink); }
+html[data-theme="dark"] .ai-assistant-message .md-table th { background: hsl(var(--accent-hue, 216) 65% 33%); color: #fff; }
+html[data-theme="dark"] .ai-assistant-message .md-table th + th { border-left-color: #ffffff33; }
+html[data-theme="dark"] .ai-assistant-message .md-table td { border-top-color: var(--line); color: var(--ink); }
+html[data-theme="dark"] .ai-assistant-message .md-table td + td { border-left-color: var(--line); }
+html[data-theme="dark"] .ai-assistant-message .md-table tbody tr:nth-child(even) td { background: #263449; }
+html[data-theme="dark"] .ai-assistant-message .md-code { color: var(--ink); background: #263449; border-color: var(--line); }
+html[data-theme="dark"] .ai-assistant-message .md-pre { background: #0b1220; border-color: var(--line); }
+html[data-theme="dark"] .ai-assistant-message .md-quote { color: var(--ink); background: #263449; }
+html[data-theme="dark"] .ai-assistant-message .md-hr { border-top-color: var(--line); }
 .ai-typing p { opacity: 0.7; font-style: italic; }
 .ai-error { margin: 8px 0; padding: 10px 14px; color: #b42318; background: #fef3f2; border: 1px solid #fecdca; border-radius: 12px; }
 .chat-composer button:disabled, .ai-notebook-dialog button:disabled { opacity: .45; cursor: default; }

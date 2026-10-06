@@ -1,82 +1,368 @@
 :root { --accent-hue: 216; }
-html[data-theme="dark"] { color-scheme: dark; --canvas: #101722; --card: #1b2534; --ink: #e6edf7; --muted: #b5c0d1; --line: #364459; background: var(--canvas); color: var(--ink); }
-html[data-theme="dark"] body { background: var(--canvas); color: var(--ink); }
-html[data-theme="dark"] :is(.sidebar, .topbar, .dashboard-card, .settings-footer, .save-status, .focus-ring > div, .theme-switch button.selected, dialog) { background: var(--card); color: var(--ink); border-color: var(--line); }
-html[data-theme="dark"] :is(.profile-preview, .field-grid input, .theme-switch, .setting-list > div, .preference-row, .search-box, .chat-composer, .chat-empty, .upload-box, .notebook-empty, .memory-box, .ai-item, .ai-user-message, .focus-stats > div, .sound-options button, .segmented-control, .prompt-grid button) { background: #263449; color: var(--ink); }
-html[data-theme="dark"] :is(h1, h2, h3, .card-header, .field-grid label, .setting-list b, .password-row b, .setting-label, .settings-footer > span, .theme-switch span, .focus-stats strong, .ai-greeting > p) { color: var(--ink); }
-html[data-theme="dark"] :is(.card-description, .page-subtitle, .profile-preview p, .setting-list small, .password-row small, .settings-footer small, .cycle-row, .focus-ring span) { color: var(--muted); }
-html[data-theme="dark"] input { color: var(--ink); }
-html[data-theme="dark"] .sound-options button[aria-pressed="true"] { background: var(--blue); color: #fff; }
-html[data-theme="dark"] .focus-card { background: var(--card); }
+
+/* ============================================================
+   DARK MODE — Quy tắc bắt buộc theo yêu cầu:
+   1. Chữ BẮT BUỘC trắng (#fff) ở mọi nơi.
+   2. Nền chính (canvas) tối nhất, card NHẠT HƠN nền 1 tông,
+      box con trong card NHẠT HƠN card 1 tông nữa để nổi khối.
+   ============================================================ */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #0f172a;   /* nền trang: tối nhất */
+  --card: #1e2a44;     /* card: nhạt hơn nền rõ ràng */
+  --card-2: #2b3d5e;   /* box con / ô nhỏ trong card: nhạt hơn card */
+  --input: #17233a;    /* ô nhập liệu */
+  --ink: #ffffff;      /* chữ chính: bắt buộc trắng */
+  --muted: #ffffff;    /* chữ phụ: cũng bắt buộc trắng */
+  --line: #3b4f6e;     /* viền */
+  --surface: #1e2a44;
+  --blue: hsl(var(--accent-hue,216) 82% 72%);
+  background: var(--canvas);
+  color: #fff;
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] #root,
+html[data-theme="dark"] .app-shell,
+html[data-theme="dark"] .workspace,
+html[data-theme="dark"] .main-content {
+  background: var(--canvas) !important;
+  background-image: none !important;
+  color: #fff !important;
+}
+
+/* ---------- 1. ÉP CHỮ TRẮNG MỌI NƠI (dùng !important để thắng mọi hardcode light-mode) ---------- */
+html[data-theme="dark"] :is(
+  h1, h2, h3, h4, h5, h6,
+  p, span, small, label, strong, b, em, summary, dt, dd, li, div,
+  a, th, td, caption, legend, figcaption, blockquote
+) {
+  color: #fff !important;
+}
+/* Chữ trong nút accent / cảnh báo giữ trắng đọc được */
+html[data-theme="dark"] :is(
+  .nav-item.active, .primary-button, .small-action, .success-button,
+  .new-chat, .quick-add button, .gold-button, .blue-callout,
+  .priority-pill, .weekly-count, .weekly-date.today, .weekly-date.overdue,
+  .heat-cell.current, .mini-days i.has-events, .date-number span,
+  .onboarding-grades button.selected, .repeat-day.active, .scope-switch button.active
+) {
+  color: #fff !important;
+}
+
+/* Các dòng mô tả / chữ mờ light-mode (#71809a, #6d7b92...) cũng ép trắng */
+html[data-theme="dark"] :is(
+  .page-subtitle, .card-description, .welcome-subtitle,
+  .landing-copy p, .landing-features p, .landing-steps p, .landing-footer p,
+  .landing-audience, .goals-hero p, .goals-heading p, .goal-note, .goal-date,
+  .roadmap-notice p, .ai-roadmap-box p, .feedback-card p, .faq-item p,
+  .repeat-hint, .repeat-preview, .duration-hint, .duration-note,
+  .month-toolbar span, .streak-message, .rhythm-quote, .level-note,
+  .focus-intro, .timer-ring span, .empty-state p, .friend-empty p,
+  .weekly-desc, .weekly-empty, .profile-copy small, .sidebar-profile-copy small,
+  .sidebar-xp small, .report-period, .muted-label, .cycle-row, .focus-ring span,
+  .goal-meta dt, .goal-meta dd, .goals-stat span, .goals-overview-copy span,
+  .emoji-group-label, .emoji-label, .detail-rows span, .timeline-labels span,
+  .month-hour, .mini-week, .ai-user-message small, .md-pre-lang
+) {
+  color: #fff !important;
+}
+
+/* Giữ icon trang trí vẫn thấy trên nền card nhạt (ép trắng luôn cho đồng bộ) */
+html[data-theme="dark"] :is(
+  .nav-item:not(.active), .nav-icon, .brand-caption, .tag, .header-icon,
+  .empty-icon, .goal-icon, .stage-icon, .stat-pill > i, .metric-card > span,
+  .summary-chip > i, .count-badge, .session-badge, .goals-count,
+  .deadline-date, .prompt-grid i, .ai-avatar, .ai-orb, .chevron,
+  .heat-cell, .challenge-days span, .mini-chapters span
+) {
+  color: #fff !important;
+}
+
+/* ---------- 2. CARD NHẠT HƠN NỀN ---------- */
+html[data-theme="dark"] :is(
+  .sidebar, .topbar,
+  .dashboard-card, .welcome-card, .dashboard-welcome, .level-card,
+  .stat-pill, .metric-card, .summary-chip,
+  .roadmap-hero, .roadmap-kpis, .roadmap-notice, .roadmap-days,
+  .stage-card, .stage-materials,
+  .goal-builder, .goals-hero, .goals-overview, .goal-card, .goals-encouragement,
+  .focus-card, .focus-invitation, .streak-card, .rhythm-card,
+  .study-window, .study-summary-item, .study-notebook,
+  .notebook-copy, .notebook-week, .notebook-note,
+  .task-item, .deadline-item, .faq-row,
+  .landing-page, .auth-page, .landing-nav, .landing-footer,
+  .landing-card, .landing-features > a, .landing-steps > div > article,
+  .landing-cta, .auth-card, .auth-tabs,
+  .year-month, .month-cell, .day-slot, .day-popup, .app-modal, .settings-dialog, dialog,
+  .month-timeline, .timeline-heading, .timeline-slot, .quick-add,
+  .time-head, .day-view-head, .repeat-box, .detail-rows div,
+  .day-deadlines, .deadline-strip-item, .timeline-deadline-row,
+  .week-strip li, .month-card, .calendar-card,
+  .chapter-progress, .contact-card, .friend-tip, .friend-empty, .leaderboard-empty,
+  .empty-state, .milestones, .milestone, .challenge,
+  .ai-banner, .ai-assistant-message, .ai-notebook-dialog, .ai-roadmap-box,
+  .ai-stage-preview, .ai-stat-grid > div, .level-summary,
+  .sidebar-profile, .sidebar-xp, .settings-footer, .save-status,
+  .chat-composer, .chat-empty, .upload-box, .notebook-empty, .memory-box,
+  .ai-item, .feedback-card, .focus-tip, .focus-stats > div, .timer-ring > div, .focus-ring > div,
+  /* vét sót qua audit: onboarding / roadmap course / schedule / stats / weekly / auth */
+  .onboarding-card, .onboarding-goal, .onboarding-review, .onboarding-saved,
+  .course-card, .course-hero, .course-hero-side, .course-hero-progress,
+  .course-stat-grid > div, .course-side-note, .roadmap-score,
+  .stage-accordion, .lesson-list li, .event-composer,
+  .metric-card, .heatmap-card, .subject-list > div,
+  .weekly-column, .weekly-column-todo, .weekly-column-doing, .weekly-column-done,
+  .weekly-add, .google-button, .landing-mockup, .mock-card,
+  .notebook-tab-panel, .study-plan-card, .community-card, .help-card,
+  .setting-card, .profile-card, .pomodoro-card, .stats-card
+) {
+  background: var(--card) !important;
+  background-image: none !important;
+  color: #fff !important;
+  border-color: var(--line) !important;
+}
+
+/* ---------- 3. BOX CON TRONG CARD: NHẠT HƠN CARD ---------- */
+html[data-theme="dark"] :is(
+  .profile-preview, .field-grid input, .theme-switch, .setting-list > div,
+  .preference-row, .search-box, .segmented-control, .view-switcher,
+  .sound-options button, .prompt-grid button, .style-list button,
+  .goal-date, .goal-subject, .online-row span, .score-ring,
+  .ai-stat-grid div, .audit-line, .mini-chapters span,
+  .roadmap-notice > span, .weekday-row, .duration-grid label,
+  .emoji-current, .emoji-option, .tone-options > button,
+  .scope-switch button, .repeat-day, .time-row > button,
+  .weekly-subject, .weekly-date, .weekly-count, .weekly-empty,
+  .summary-chip i, .metric-card > span, .stat-pill > i,
+  .header-icon, .empty-icon, .timeline-labels, .composer-top,
+  .ghost-button, .outline-button, .icon-button, .round-button, .today-button,
+  /* vét sót: các ô/box con còn nền trắng ở light-mode */
+  .onboarding-progress li, .onboarding-grades button, .lesson-list li,
+  .course-stat-grid > div, .stage-accordion-icon, .stage-materials,
+  .ai-stage-preview, .weekly-search, .weekly-filters select,
+  .weekly-stepper button, .link-button, .event-composer input,
+  .duration-input, .subject-input select, .tone-options > button span,
+  .password-row > span, .setting-label, .heat-days, .heat-legend,
+  .mini-days i, .lesson-check, .course-hero-tags .tag, .course-cover-tags .tag
+) {
+  background: var(--card-2) !important;
+  background-image: none !important;
+  color: #fff !important;
+  border-color: var(--line) !important;
+}
+
+/* Chip pastel sáng ở light-mode -> sang dark dùng card-2 + chữ trắng cho đồng bộ */
+html[data-theme="dark"] :is(
+  .summary-chip.blue, .summary-chip.mint, .summary-chip.gold, .summary-chip.coral,
+  .tag.gold, .tag.blue, .tag.mint, .tag.violet,
+  .streak-pill, .xp-pill, .session-badge, .student-deadline time,
+  .stage-checkpoint, .deadline-strip-item.priority-high,
+  .stat-pill.gold, .stat-pill.blue, .stat-pill.mint,
+  .header-icon.blue, .header-icon.violet, .header-icon.mint,
+  .header-icon.coral, .header-icon.orange, .header-icon.pink, .header-icon.gold
+) {
+  background: var(--card-2) !important;
+  background-image: none !important;
+  color: #fff !important;
+  border-color: var(--line) !important;
+}
+
+/* Cột weekly / thẻ weekly: giữ phân loại bằng viền, nền theo tầng card */
+html[data-theme="dark"] :is(.weekly-column-todo, .weekly-column-doing, .weekly-column-done) {
+  background: var(--card) !important;
+  background-image: none !important;
+  color: #fff !important;
+}
+html[data-theme="dark"] :is(
+  .weekly-card.priority-high, .weekly-card.priority-medium, .weekly-card.priority-low,
+  .weekly-column-done .weekly-card, .weekly-card
+) {
+  background: var(--card-2) !important;
+  background-image: none !important;
+  color: #fff !important;
+  border-color: var(--line) !important;
+}
+html[data-theme="dark"] :is(.weekly-card h3, .weekly-column-done .weekly-card h3, .weekly-desc, .weekly-column-done .weekly-desc) {
+  color: #fff !important;
+}
+
+/* ---------- 4. Ô NHẬP LIỆU ---------- */
+html[data-theme="dark"] :is(
+  input:not([type="checkbox"]):not([type="radio"]), textarea, select, option
+) {
+  background: var(--input) !important;
+  color: #fff !important;
+  border-color: #4b617f !important;
+}
+html[data-theme="dark"] :is(input, textarea, select)::placeholder {
+  color: rgba(255, 255, 255, .65) !important;
+  opacity: 1;
+}
+
+/* ---------- 5. NÚT / TRẠNG THÁI ---------- */
+/* Nút chính: giữ nền accent để nổi trên card nhạt, chữ trắng */
+html[data-theme="dark"] :is(
+  .nav-item.active, .primary-button, .small-action, .success-button,
+  .new-chat, .quick-add button, .chat-composer > button,
+  .view-switcher button.active, .segmented-control button.selected,
+  .theme-switch button.selected, .scope-switch button.active, .repeat-day.active
+) {
+  color: #fff !important;
+  background: hsl(var(--accent-hue,216) 65% 38%) !important;
+  background-image: none !important;
+  border-color: transparent !important;
+}
+html[data-theme="dark"] :is(.nav-item:hover, .month-cell:hover, .year-month:hover, .timeline-slot:hover, .day-slot:hover) {
+  background: var(--card-2) !important;
+  color: #fff !important;
+}
+html[data-theme="dark"] :is(.heat-cell.current, .heat-cell.selected, .selected-date) {
+  border-color: var(--blue) !important;
+  color: #fff !important;
+}
+html[data-theme="dark"] .event-pill {
+  background: var(--card-2) !important;
+  color: #fff !important;
+}
+html[data-theme="dark"] .event-pill :is(b, span, button) { color: #fff !important; }
+html[data-theme="dark"] :is(.delete-button, .deadline-remove, .event-remove, .weekly-delete) {
+  background: #512d34 !important;
+  color: #ffd9de !important;
+}
+html[data-theme="dark"] :is(.auth-error, .ai-error) {
+  background: #512d34 !important;
+  color: #ffd9de !important;
+  border-color: #7a3b44 !important;
+}
+html[data-theme="dark"] :is(.auth-success) {
+  background: #183d35 !important;
+  color: #a2ebca !important;
+  border-color: #2a5a4f !important;
+}
+/* Nút vàng chữ nâu ở light-mode -> sang dark ép chữ trắng cho đúng quy tắc */
+html[data-theme="dark"] :is(.gold-button, .blue-callout) { color: #fff !important; }
+html[data-theme="dark"] .goals-ring {
+  background: radial-gradient(circle, var(--card) 61%, transparent 62%), conic-gradient(var(--blue) var(--goal-progress), #3b4f6e 0) !important;
+}
+html[data-theme="dark"] .progress, html[data-theme="dark"] .progress-line, html[data-theme="dark"] .focus-progress { background: #3b4f6e !important; }
+
+/* ---------- 5b. RIÊNG TRANG MỤC TIÊU (Goals) ---------- */
+/* Hero + overview: card nhạt hơn nền */
+html[data-theme="dark"] :is(.goals-hero-copy, .goals-overview-copy) {
+  color: #fff !important;
+}
+html[data-theme="dark"] :is(.goals-kicker, .goals-hero h2 em) {
+  color: #fff !important;
+}
+/* 3 ô thống kê: box con nhạt hơn card */
+html[data-theme="dark"] :is(.goals-stat, .goal-meta, .goal-icon, .emoji-current-icon, .emoji-panel) {
+  background: var(--card-2) !important;
+  background-image: none !important;
+  color: #fff !important;
+  border-color: var(--line) !important;
+}
+html[data-theme="dark"] :is(
+  .goals-stat b, .goals-stat span,
+  .goals-stat.is-doing b, .goals-stat.is-done b,
+  .goals-ring strong, .goals-ring span,
+  .goals-overview-copy b, .goals-overview-copy span, .goals-overview-copy small,
+  .goal-meta dt, .goal-meta dd,
+  .goals-encouragement b, .goals-encouragement p,
+  .goal-card h3, .goal-action
+) {
+  color: #fff !important;
+}
+/* Trạng thái + đếm: box con nhạt hơn card, chữ trắng */
+html[data-theme="dark"] :is(.goal-status, .goals-count, .goal-status.is-doing, .goal-status.is-done) {
+  background: var(--card-2) !important;
+  background-image: none !important;
+  color: #fff !important;
+  border: 1px solid var(--line) !important;
+}
+/* Card hoàn thành: bỏ gradient trắng, dùng cùng tầng card */
+html[data-theme="dark"] :is(.goal-card.is-completed, .goal-card.violet, .goal-card.mint) {
+  background: var(--card) !important;
+  background-image: none !important;
+  color: #fff !important;
+  border-color: var(--line) !important;
+  border-top-color: var(--blue) !important;
+}
+html[data-theme="dark"] :is(.goal-card.violet .goal-icon, .goal-card.mint .goal-icon) {
+  background: var(--card-2) !important;
+  color: #fff !important;
+  border-color: var(--line) !important;
+}
+/* Quá hạn: giữ đỏ sáng để vẫn nhận biết trên nền tối */
+html[data-theme="dark"] .goal-meta dd.is-overdue { color: #ff9aa2 !important; }
+html[data-theme="dark"] .goal-delete { color: #fff !important; }
+html[data-theme="dark"] .goal-delete:hover { color: #ff9aa2 !important; }
+
+/* Markdown trong AI */
+html[data-theme="dark"] .ai-assistant-message .md-table { background: var(--card) !important; color: #fff !important; }
+html[data-theme="dark"] .ai-assistant-message .md-table th { background: hsl(var(--accent-hue,216) 65% 33%) !important; color: #fff !important; }
+html[data-theme="dark"] .ai-assistant-message .md-table th + th { border-left-color: #ffffff33 !important; }
+html[data-theme="dark"] .ai-assistant-message .md-code { background: var(--card-2) !important; color: #fff !important; }
+html[data-theme="dark"] .ai-assistant-message .md-quote { background: var(--card-2) !important; color: #fff !important; }
+
+html[data-theme="dark"] :is(button, a, input, textarea, select):focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 3px;
+}
+
+/* Switch giữ nguyên accent */
+html button.toggle[aria-checked="false"] { background: #747b85; }
+html button.toggle[aria-checked="true"] { background: hsl(var(--accent-hue,216) 65% 45%); }
+html button.toggle i { background: #fff; }
+
 .avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
-html[data-theme="dark"] :is(.ghost-button, .icon-button) { background: #263449; color: var(--ink); border-color: var(--line); }
 
-/* Dark surfaces and readable text across every application page. */
-html[data-theme="dark"] { --surface: #1b2534; --blue: hsl(var(--accent-hue,216) 82% 72%); }
-html[data-theme="dark"] :is(.welcome-card,.level-card,.stat-pill,.metric-card,.summary-chip,.roadmap-hero,.roadmap-kpis,.roadmap-notice,.stage-card,.goal-builder,.goals-hero,.goals-overview,.goal-card,.goals-encouragement,.friend-tip,.leaderboard-empty,.focus-tip,.contact-card,.ai-banner,.level-summary,.ai-stat-grid > div,.sidebar-profile,.sidebar-xp,.milestones,.milestone,.study-window,.challenge,.task-item,.deadline-item,.faq-row,.year-month,.month-cell,.day-slot,.time-row > button,.day-popup,.event-composer,.month-timeline,.timeline-heading,.timeline-slot,.quick-add,.time-head,.day-view-head) {
-  background:var(--card); color:var(--ink); border-color:var(--line);
+/* ============================================================
+   6. TỐI ƯU GIAO DIỆN DARK (nổi khối, mượt, đồng bộ tông mới)
+   ============================================================ */
+/* Chuyển theme mượt, không giật */
+html[data-theme="dark"] body,
+html[data-theme="dark"] .app-shell,
+html[data-theme="dark"] .sidebar,
+html[data-theme="dark"] .topbar,
+html[data-theme="dark"] .dashboard-card {
+  transition: background-color .25s ease, border-color .25s ease, color .25s ease;
 }
-html[data-theme="dark"] :is(h1,h2,h3,h4,p,label,small,strong,b,em,summary,dt,dd,li,span) { color:inherit; }
-html[data-theme="dark"] :is(.card-header,.header-title,.page-intro,.settings-heading,.welcome-top,.welcome-subtitle,.focus-intro,.streak-visual,.streak-message,.rhythm-quote,.level-note,.eyebrow,.brand-name,.brand-mark,.goal-date,.goal-progress-label,.goal-subject,.goal-note,.goal-action,.goals-heading,.goals-overview-copy,.study-windows,.subject-list > div > div,.challenge,.composer-top,.calendar-nav,.weekday-row,.date-number,.timeline-labels,.month-hour,.mini-week,.mini-days,.roadmap-lessons,.roadmap-bottom,.score-meta,.stage-top,.cycle-row,.online-row,.ai-greeting,.ai-item,.ai-item button,.style-list button,.empty-state,.friend-empty,.notebook-empty,.memory-box,.feedback-card,.faq-item,.heat-days,.heat-legend,.empty-strip,.setting-label,.preference-row,.theme-switch,.field-grid,.password-row,.settings-footer,.setting-list,.save-status,.profile-preview) { color:var(--ink); }
-html[data-theme="dark"] :is(.page-subtitle,.card-description,.report-period,.muted-label,.sidebar-profile-copy small,.sidebar-xp small,.goal-date small,.goal-note,.deadline-item small,.roadmap-lessons small,.chat-composer small,.timeline-labels span,.month-hour,.mini-week,.muted-cell .date-number) { color:var(--muted); }
-html[data-theme="dark"] :is(.nav-item:not(.active),.nav-icon,.heat-cell,.challenge-days span,.mini-chapters span,.count-badge,.session-badge,.goals-count,.brand-caption,.tag,.header-icon,.empty-icon,.goal-icon,.stage-icon,.save-status span,.profile-preview em,.stat-pill > i,.metric-card > span,.summary-chip > i,.deadline-date,.date-number span,.mini-days i.has-events,.prompt-grid i,.ai-avatar,.ai-orb) { color:var(--ink); background:#263449; border-color:var(--line); }
-html[data-theme="dark"] :is(input:not([type="checkbox"]):not([type="radio"]),textarea,select,option) { color:var(--ink); background:#182232; border-color:#53647b; }
-html[data-theme="dark"] :is(input,textarea)::placeholder { color:#afbdd0; opacity:1; }
-html[data-theme="dark"] :is(.ghost-button,.outline-button,.round-button,.today-button,.composer-top button,.sound-options button,.goal-action,.style-list button,.segmented-control button,.view-switcher button,.theme-switch button,.ai-item button,.notebook-empty button,.memory-box button) { color:var(--ink); background:#263449; border-color:#53647b; }
-html[data-theme="dark"] :is(.nav-item.active,.primary-button,.small-action,.success-button,.new-chat,.quick-add button,.chat-composer > button,.sound-options button[aria-pressed="true"],.view-switcher button.active,.segmented-control button.selected,.theme-switch button.selected) { color:#fff; background:hsl(var(--accent-hue,216) 65% 33%); }
-html[data-theme="dark"] :is(.nav-item:hover,.month-cell:hover,.year-month:hover,.timeline-slot:hover,.day-slot:hover) { background:#32455e; color:#fff; }
-html[data-theme="dark"] :is(.heat-cell.current,.heat-cell.selected,.selected-date) { border-color:var(--blue); color:var(--blue); }
-html[data-theme="dark"] .event-pill { background:#263b50; color:#f1f5fb; }
-html[data-theme="dark"] .event-pill :is(b,span,button) { color:inherit; }
-html[data-theme="dark"] :is(.delete-button,.deadline-remove,.event-remove) { background:#512d34; color:#ffd9de; }
-html[data-theme="dark"] .blue-callout { color:#fff; }
-html[data-theme="dark"] .gold-button { color:#3d2900; background:#ffc32f; }
-html[data-theme="dark"] .goals-ring { background:radial-gradient(circle,var(--card) 61%,transparent 62%),conic-gradient(var(--blue) var(--goal-progress), #364459 0); }
-
-html[data-theme="dark"] .progress-line { background:#364459; }
-html[data-theme="dark"] :is(button,a,input,textarea,select):focus-visible { outline:3px solid var(--blue); outline-offset:3px; }
-/* Switches follow the selected accent in both themes; off is neutral gray. */
-html button.toggle[aria-checked="false"] { background:#747b85; }
-html button.toggle[aria-checked="true"] { background:hsl(var(--accent-hue,216) 65% 45%); }
-html button.toggle i { background:#fff; }
-html .setting-list > div:has([aria-checked="true"]) > span { color:hsl(var(--accent-hue,216) 75% 28%); background:hsl(var(--accent-hue,216) 70% 88%); }
-html .setting-list > div:has([aria-checked="false"]) > span { color:#51565e; background:#d5d8dc; }
-html[data-theme="dark"] .setting-list > div:has([aria-checked="true"]) > span { color:hsl(var(--accent-hue,216) 85% 85%); background:hsl(var(--accent-hue,216) 45% 28%); }
-html[data-theme="dark"] .setting-list > div:has([aria-checked="false"]) > span { color:#d3d8e0; background:#414852; }
-
-html[data-theme="dark"] :is(.goal-date,.goal-subject,.online-row span,.password-row > span,.view-switcher,.level-summary .progress-line,.mini-chapters span,.style-list i,.score-ring,.timer-ring,.ai-stat-grid div,.audit-line) { background:#263449; color:var(--ink); border-color:var(--line); }
-
-/* === Đồng bộ mọi ô box văn bản sang màu tối (mọi trang, kể cả Landing/Auth) === */
-/* Dùng đúng biến theme hiện tại: nền chính var(--card) #1b2534, box con #263449, chữ var(--ink), chữ mờ var(--muted). */
-html[data-theme="dark"] :is(.landing-page, .auth-page) { background:var(--canvas); background-image:none; color:var(--ink); }
-html[data-theme="dark"] :is(.landing-nav, .landing-footer) { background:var(--card); background-image:none; color:var(--ink); border-color:var(--line); }
-html[data-theme="dark"] :is(.landing-nav nav, .landing-copy .tag) { background:#263449; border-color:var(--line); }
-html[data-theme="dark"] :is(.landing-nav nav a) { color:var(--muted); }
-html[data-theme="dark"] :is(.landing-nav nav a:hover, .landing-copy h1, .landing-section > h2, .landing-features h3, .landing-steps h3) { color:var(--ink); background:#263449; border-color:var(--line); }
-html[data-theme="dark"] :is(.landing-card, .landing-features > a, .landing-steps > div > article, .auth-card, .auth-tabs, .dashboard-card, .welcome-card, .dashboard-welcome, .level-card, .stat-pill, .metric-card, .summary-chip, .roadmap-hero, .roadmap-kpis, .roadmap-notice, .chapter-progress, .stage-card, .goal-builder, .goals-hero, .goals-overview, .goal-card, .goals-encouragement, .friend-tip, .leaderboard-empty, .contact-card, .study-window, .study-summary-item, .study-notebook, .notebook-copy, .notebook-week, .notebook-note, .focus-card, .focus-invitation, .streak-card, .rhythm-card, .ai-assistant-message, .ai-notebook-dialog, .ai-roadmap-box, .ai-stage-preview, .stage-materials, .day-popup, .app-modal, .settings-dialog, .timeline-heading, .timeline-slot, .time-head, .repeat-box, .detail-rows div, .day-deadlines, .deadline-strip-item, .timeline-deadline-row, .emoji-panel, .emoji-current, .emoji-current-icon, .emoji-option, .duration-grid label, .tone-options > button, .save-status, .task-item, .week-strip li, .friend-empty, .empty-state, .quick-add, .chat-composer, .upload-box, .chat-empty, .prompt-grid button, .feedback-card textarea, .roadmap-days, .scope-switch button, .repeat-day) {
-  background:var(--card); background-image:none; color:var(--ink); border-color:var(--line);
+/* Card nổi khỏi nền: shadow sâu + viền sáng nhẹ */
+html[data-theme="dark"] :is(
+  .dashboard-card, .welcome-card, .goal-card, .course-card, .course-hero,
+  .onboarding-card, .auth-card, .landing-card, .stage-accordion,
+  .metric-card, .stat-pill, .roadmap-hero, .roadmap-kpis
+) {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .35) !important;
 }
-html[data-theme="dark"] :is(.goals-overview, .level-card, .notebook-copy) { background:var(--card); background-image:none; }
-html[data-theme="dark"] :is(.timer-ring > div, .focus-ring > div) { background:var(--card); background-image:none; color:var(--ink); }
-/* Box con nằm trong card: dùng lớp nền thứ cấp để phân tầng. */
-html[data-theme="dark"] :is(.roadmap-notice > span, .style-list button.selected, .emoji-option:hover, .emoji-option.selected, .view-switcher button.active, .segmented-control button.selected, .auth-tabs a.selected, .auth-tabs button.selected, .tone-options > button.selected, .tone-options > button > span, .repeat-day, .scope-switch button, .detail-rows div, .repeat-box, .timeline-heading, .time-head, .weekday-row, .month-timeline, .duration-grid label, .friend-tip, .task-item, .week-strip li, .upload-box, .chat-empty, .prompt-grid button) {
-  background:#263449; color:var(--ink); border-color:var(--line);
+/* Hover card nhấc nhẹ */
+html[data-theme="dark"] :is(.course-card:hover, .goal-card:hover, .dashboard-card:hover) {
+  border-color: hsl(var(--accent-hue,216) 60% 55%) !important;
 }
-/* Chip pastel sáng -> phiên bản tối vẫn đọc được. */
-html[data-theme="dark"] :is(.summary-chip.blue, .summary-chip.mint, .summary-chip.gold, .summary-chip.coral, .tag.gold, .tag.blue, .tag.mint, .tag.violet, .streak-pill, .xp-pill, .session-badge, .student-deadline time, .stage-checkpoint, .deadline-strip-item, .day-deadlines, .timeline-deadline-row, .month-cell .day-deadlines, .deadline-strip-item.priority-high) {
-  background:#263449; background-image:none; color:var(--ink); border-color:var(--line);
+/* Cover trang trí (course-cover, ai-banner, landing-cta): GIỮ gradient màu
+   để giao diện có điểm nhấn, chỉ ép chữ trắng */
+html[data-theme="dark"] :is(
+  .course-cover, .course-cover.blue, .course-cover.violet, .course-cover.gold,
+  .course-cover.mint, .course-cover.rose, .course-cover.sky,
+  .course-hero-cover, .ai-banner, .landing-cta, .brand-mark, .avatar
+) {
+  color: #fff !important;
 }
-html[data-theme="dark"] :is(.summary-chip i, .metric-card > span, .stat-pill > i, .header-icon, .empty-icon) { background:#263449; color:var(--ink); border-color:var(--line); }
-html[data-theme="dark"] :is(.auth-error) { background:#512d34; color:#ffd9de; border-color:#7a3b44; }
-html[data-theme="dark"] :is(.auth-success) { background:#183d35; color:#a2ebca; border-color:#2a5a4f; }
-html[data-theme="dark"] :is(.ai-error) { background:#512d34; color:#ffd9de; border-color:#7a3b44; }
-/* Ô nhập liệu: nền tối, viền, placeholder đồng bộ. */
-html[data-theme="dark"] :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select, option, .field-grid input, .field-grid select, .auth-card select, .auth-card input, .app-modal input, .app-modal textarea, .app-modal select, .feedback-card textarea, .duration-input input, .subject-input select, .quick-add input, .chat-composer input, .search-box input, .ai-notebook-dialog textarea, .composer-top input, .composer-top select) {
-  background:#182232; color:var(--ink); border-color:#53647b;
+html[data-theme="dark"] :is(.course-cover *, .course-hero-cover *, .ai-banner *, .landing-cta *) {
+  color: #fff !important;
 }
-html[data-theme="dark"] :is(input, textarea, select)::placeholder { color:#afbdd0; opacity:1; }
-html[data-theme="dark"] :is(.field-grid input, .feedback-card textarea, .tone-options > button, .auth-card select, .duration-grid label) { border-color:#53647b; }
-html[data-theme="dark"] :is(input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:focus) { border-color:var(--blue); outline:3px solid var(--blue); outline-offset:2px; }
-/* Modal/dialog/popover. */
-html[data-theme="dark"] :is(.app-modal, .day-popup, .ai-notebook-dialog, .settings-dialog, dialog) { background:var(--card); color:var(--ink); border-color:var(--line); }
-html[data-theme="dark"] :is(.landing-copy p, .landing-features p, .landing-steps p, .landing-footer p, .goals-hero p, .roadmap-notice p, .ai-roadmap-box p, .ai-stage-preview small, .feedback-card p, .faq-item p, .repeat-hint, .repeat-preview, .duration-hint, .duration-note, .month-toolbar span) { color:var(--muted); }
+/* Scrollbar tối đồng bộ */
+html[data-theme="dark"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+html[data-theme="dark"] ::-webkit-scrollbar-track { background: var(--canvas); }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: var(--card-2); border-radius: 8px; }
+html[data-theme="dark"] ::selection { background: hsl(var(--accent-hue,216) 65% 38%); color: #fff; }
+/* Đồng bộ màu cũ còn sót trong onboarding.css sang tông mới */
+html[data-theme="dark"] .onboarding-page { background: var(--canvas) !important; }
+html[data-theme="dark"] .onboarding-card { background: var(--card) !important; border-color: var(--line) !important; color: #fff !important; }
+html[data-theme="dark"] :is(.onboarding-progress li, .tone-options button, .onboarding-grades button, .onboarding-card input, .onboarding-card select, .onboarding-goal) {
+  background: var(--card-2) !important;
+  border-color: var(--line) !important;
+  color: #fff !important;
+}
+html[data-theme="dark"] .onboarding-progress li.current { background: hsl(var(--accent-hue,216) 60% 35%) !important; color: #fff !important; outline-color: var(--blue) !important; }

@@ -120,9 +120,14 @@ def _request_completion(client, model, messages, extra_headers, tools=None):
         "model": model,
         "messages": messages,
         "temperature": 0.7,
-        "max_tokens": 1000,
+        # Nemotron-3-super là reasoning model: reasoning tokens tính chung vào
+        # max_tokens. Để 1000 như trước thì reasoning ăn hết budget -> content rỗng
+        # + finish_reason=length -> 502. Tăng lên 3000 + ép reasoning effort=low.
+        "max_tokens": 3000,
         "stream": False,
         "extra_headers": extra_headers or None,
+        # effort low (~20% budget cho reasoning) + exclude để không trả reasoning về.
+        "extra_body": {"reasoning": {"effort": "low", "exclude": True}},
     }
     if tools is not None:
         kwargs["tools"] = tools

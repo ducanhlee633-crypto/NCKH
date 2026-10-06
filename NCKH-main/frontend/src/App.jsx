@@ -8,6 +8,7 @@ import './styles/schedule.css'
 import './styles/roadmap.css'
 import './styles/stats.css'
 import './styles/ai-assistant.css'
+import './styles/ai-widget.css'
 import './styles/pomodoro.css'
 import './styles/weekly-tasks.css'
 import './styles/settings.css'
@@ -18,6 +19,7 @@ import DashboardPage from './pages/DashboardPage'
 import SchedulePage from './pages/SchedulePage'
 import WeeklyTasksPage from './pages/WeeklyTasksPage'
 import AIAssistantPage from './pages/AIAssistantPage'
+import AiAssistantWidget from './components/AiAssistantWidget'
 import PomodoroPage from './pages/PomodoroPage'
 import RoadmapPage from './pages/RoadmapPage'
 import StatsPage from './pages/StatsPage'
@@ -163,6 +165,7 @@ export default function App() {
           <a className="primary-button" href="#dashboard">Về góc học tập</a>
         </section>
       ))}
+      <AiAssistantWidget />
     </AppShell>
   )
 }

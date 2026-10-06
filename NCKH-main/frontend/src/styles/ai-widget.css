@@ -1,0 +1,64 @@
+/* Widget chat nhanh — robot pixel-art trong suốt, nhảy quanh màn hình khi nhấn */
+.ai-widget { position: fixed; inset: 0; z-index: 60; pointer-events: none; background: transparent; }
+
+/* Nút robot: hoàn toàn trong suốt, không khung nền — bóng đổ bám theo silhouette ảnh.
+   Nhấn giữ để kéo đi khắp màn hình (touch-action none để kéo mượt trên mobile). */
+.ai-widget-fab { position: fixed; width: 72px; height: 72px; padding: 0; background: transparent; background-color: transparent; border: 0; outline: 0; box-shadow: none; cursor: grab; touch-action: none; pointer-events: auto; filter: drop-shadow(0 8px 14px rgba(38, 89, 177, 0.3)); transition: left 0.25s ease-out, top 0.25s ease-out, scale 0.15s; }
+.ai-widget-fab:hover { scale: 1.08; }
+.ai-widget-fab:active { cursor: grabbing; }
+.ai-widget-fab.dragging { cursor: grabbing; scale: 1.12; }
+.ai-widget-fab img { width: 100%; height: 100%; object-fit: contain; background: transparent; image-rendering: pixelated; pointer-events: none; user-select: none; -webkit-user-drag: none; animation: ai-widget-bob 2.6s ease-in-out infinite; }
+
+@keyframes ai-widget-bob {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -7px; }
+}
+
+/* Ô chat bám theo vị trí robot (left/top tính trong component) */
+.ai-widget-panel { position: fixed; display: flex; flex-direction: column; overflow: hidden; background: var(--card); border: 2px solid var(--line); border-radius: 20px; box-shadow: 0 16px 40px rgba(38, 89, 177, 0.22); pointer-events: auto; animation: ai-widget-pop 0.22s ease-out; }
+
+@keyframes ai-widget-pop {
+  from { opacity: 0; scale: 0.92; }
+  to { opacity: 1; scale: 1; }
+}
+
+.ai-widget-header { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: linear-gradient(105deg, hsl(var(--accent-hue, 216) 93.3% 41.2%), hsl(var(--accent-hue, 216) 88.4% 62.9%)); color: #fff; }
+.ai-widget-avatar { width: 40px; height: 40px; object-fit: contain; background: transparent; image-rendering: pixelated; }
+.ai-widget-title { flex: 1; min-width: 0; }
+.ai-widget-title b { display: block; font-size: 14px; }
+.ai-widget-title small { display: block; font-size: 11px; opacity: 0.9; }
+.ai-widget-expand { color: #fff; font-size: 16px; text-decoration: none; opacity: 0.9; }
+.ai-widget-expand:hover { opacity: 1; }
+.ai-widget-close { display: grid; place-items: center; width: 30px; height: 30px; color: #fff; background: #ffffff2d; border: 0; border-radius: 50%; font-size: 18px; cursor: pointer; }
+
+.ai-widget-messages { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; padding: 12px; }
+.ai-widget-ai, .ai-widget-user { max-width: 92%; padding: 9px 12px; border-radius: 14px; font-size: 13.5px; line-height: 1.6; overflow-wrap: anywhere; }
+.ai-widget-ai { align-self: flex-start; background: #fff; border: 1px solid hsl(var(--accent-hue, 216) 77.8% 91.2%); border-radius: 14px 14px 14px 4px; }
+.ai-widget-ai p { margin: 0; white-space: pre-wrap; }
+.ai-widget-ai .md-body { gap: 8px; font-size: 13.5px; }
+.ai-widget-ai .md-p { font-size: 13.5px; line-height: 1.6; }
+.ai-widget-user { align-self: flex-end; background: hsl(var(--accent-hue, 216) 100% 96.9%); border-radius: 14px 14px 4px 14px; }
+.ai-widget-user p { margin: 0; white-space: pre-wrap; }
+.ai-widget-typing p { opacity: 0.7; font-style: italic; }
+
+.ai-widget-error { margin: 0 12px 8px; padding: 8px 12px; color: #b42318; background: #fef3f2; border: 1px solid #fecdca; border-radius: 10px; font-size: 12.5px; }
+
+.ai-widget-composer { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--line); }
+.ai-widget-composer input { flex: 1; min-width: 0; height: 40px; padding: 0 14px; color: var(--ink); background: hsl(var(--accent-hue, 216) 100% 98%); border: 2px solid hsl(var(--accent-hue, 216) 100% 90.4%); border-radius: 20px; outline: 0; font-size: 13px; }
+.ai-widget-composer input:focus { border-color: var(--blue); }
+.ai-widget-composer button { width: 40px; height: 40px; flex-shrink: 0; color: #fff; background: var(--blue); border: 0; border-radius: 50%; font-size: 18px; cursor: pointer; }
+.ai-widget-composer button:disabled { opacity: 0.45; cursor: default; }
+
+html[data-theme="dark"] .ai-widget-ai { background: #182232; }
+html[data-theme="dark"] .ai-widget-user { background: #263449; }
+html[data-theme="dark"] .ai-widget-composer input { background: #182232; }
+
+@media (max-width: 650px) {
+  .ai-widget-fab { width: 60px; height: 60px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-widget-fab { transition: none; }
+  .ai-widget-fab img { animation: none; }
+  .ai-widget-panel { animation: none; }
+}

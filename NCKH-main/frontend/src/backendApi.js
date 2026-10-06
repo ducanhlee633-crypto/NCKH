@@ -597,11 +597,6 @@ function goalErrorMessage(failure, fallback) {
 }
 
 const normalizeGoalStatus = value => (value === 'completed' ? 'completed' : 'in_progress')
-const normalizeGoalProgress = value => {
-  const num = Number(value)
-  if (!Number.isFinite(num)) return 0
-  return Math.max(0, Math.min(100, Math.round(num)))
-}
 const normalizeTargetScore = value => {
   if (value === null || value === undefined || value === '') return null
   const num = Number(value)
@@ -609,7 +604,7 @@ const normalizeTargetScore = value => {
   return Math.max(0, Math.min(10, Math.round(num * 10) / 10))
 }
 
-/** Row server {id,title,target_score,icon,start_date,end_date,status,progress} -> item UI {id,title,targetScore,startDate,date,icon,status,progress}. */
+/** Row server {id,title,target_score,icon,start_date,end_date,status} -> item UI {id,title,targetScore,startDate,date,icon,status}. progress giữ tương thích ngược nhưng UI không dùng. */
 export function goalFromServer(row = {}) {
   const completed = normalizeGoalStatus(row.status) === 'completed'
   return {
@@ -622,21 +617,21 @@ export function goalFromServer(row = {}) {
     date: row.end_date || row.date || '',
     endDate: row.end_date || row.date || '',
     status: normalizeGoalStatus(row.status),
-    progress: completed ? 100 : normalizeGoalProgress(row.progress),
     ...(completed ? { completedAt: row.end_date || row.date || '' } : {}),
   }
 }
 
-/** Item UI -> payload POST/PUT /api/goals. */
+/** Item UI -> payload POST/PUT /api/goals. Không còn nhập tiến độ từng card: progress luôn suy từ status để tương thích DB cũ. */
 export function goalToPayload(item = {}) {
   const targetScore = normalizeTargetScore(item.targetScore ?? item.target_score)
+  const status = normalizeGoalStatus(item.status)
   const payload = {
     title: String(item.title || '').trim(),
     icon: String(item.icon || item.emoji || '🌱').slice(0, 16) || '🌱',
     start_date: item.startDate || item.start_date,
     end_date: item.date || item.endDate || item.end_date,
-    status: normalizeGoalStatus(item.status),
-    progress: normalizeGoalProgress(item.progress),
+    status,
+    progress: status === 'completed' ? 100 : 0,
   }
   if (targetScore !== null) payload.target_score = targetScore
   return payload
@@ -676,7 +671,7 @@ export async function createGoal(payload) {
   }
 }
 
-/** PUT /api/goals/{id} — sửa mục tiêu (đổi tên, ngày, trạng thái, tiến độ...). */
+/** PUT /api/goals/{id} — sửa mục tiêu (đổi tên, ngày, trạng thái...). */
 export async function updateGoal(id, payload) {
   try {
     const { data } = await api.put(`/api/goals/${encodeURIComponent(String(id || ''))}`, goalToPayload(payload))
@@ -686,7 +681,7 @@ export async function updateGoal(id, payload) {
   }
 }
 
-/** PATCH /api/goals/{id} — cập nhật 1 phần (VD: {status} hoặc {progress}). Dùng payload thô, không qua goalToPayload. */
+/** PATCH /api/goals/{id} — cập nhật 1 phần (VD: {status}). Dùng payload thô, không qua goalToPayload. */
 export async function patchGoal(id, payload) {
   try {
     const { data } = await api.patch(`/api/goals/${encodeURIComponent(String(id || ''))}`, payload)
@@ -703,6 +698,255 @@ export async function deleteGoal(id) {
     return null
   } catch (failure) {
     throw { ...failure, friendlyMessage: goalErrorMessage(failure, 'Không xóa được mục tiêu trên server.') }
+  }
+}
+
+/** Việc trong tuần (weekly_tasks): kanban todo/doing/done cho WeeklyTasksPage. Chỉ gọi khi đã đăng nhập. */
+
+export const WEEKLY_TASK_STATUS = ['todo', 'doing', 'done']
+export const WEEKLY_TASK_PRIORITY = ['high', 'medium', 'low']
+
+function weeklyTaskErrorMessage(failure, fallback) {
+  const detail = failure.response?.data?.detail
+  if (detail) return typeof detail === 'string' ? detail : 'Thông tin việc chưa hợp lệ. Kiểm tra lại các trường.'
+  if (failure.response?.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
+  return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
+}
+
+const normalizeWeeklyStatus = value => (value === 'doing' || value === 'done' ? value : 'todo')
+const normalizeWeeklyPriority = value => (value === 'high' || value === 'low' ? value : 'medium')
+const normalizeWeeklyDate = value => {
+  const text = String(value || '').trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : ''
+}
+
+/** Row server {id,title,description,subject,date,priority,status} -> item UI WeeklyTasksPage. */
+export function weeklyTaskFromServer(row = {}) {
+  const date = row.date ? String(row.date).slice(0, 10) : ''
+  return {
+    id: row.id,
+    title: String(row.title || ''),
+    description: String(row.description || ''),
+    subject: String(row.subject || ''),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '',
+    priority: normalizeWeeklyPriority(row.priority),
+    status: normalizeWeeklyStatus(row.status),
+  }
+}
+
+/** Item UI -> payload POST/PUT /api/weekly-tasks. date rỗng gửi null (chưa hẹn ngày). */
+export function weeklyTaskToPayload(item = {}) {
+  const title = String(item.title || '').trim()
+  const description = String(item.description || '').trim().slice(0, 500)
+  const subject = String(item.subject || '').trim().slice(0, 40)
+  const date = normalizeWeeklyDate(item.date)
+  return {
+    title,
+    description,
+    ...(subject ? { subject } : { subject: null }),
+    ...(date ? { date } : { date: null }),
+    priority: normalizeWeeklyPriority(item.priority),
+    status: normalizeWeeklyStatus(item.status),
+  }
+}
+
+/** Gom task local cũ thành payload để migrate 1 lần lên server. */
+export function weeklyTasksLocalForMigration(list = []) {
+  return (Array.isArray(list) ? list : [])
+    .filter(item => item && !item.serverId && typeof item.title === 'string' && item.title.trim())
+    .map(item => weeklyTaskToPayload(item))
+    .filter(payload => payload.title && payload.title.length <= 120)
+    .filter(payload => !payload.date || /^\d{4}-\d{2}-\d{2}$/.test(payload.date))
+}
+
+/** GET /api/weekly-tasks?from=&to=&status=&priority=&subject=&q= — việc của chính mình. */
+export async function fetchWeeklyTasks({ from, to, status: taskStatus, priority, subject, q } = {}) {
+  const params = new URLSearchParams()
+  if (from) params.set('from', from)
+  if (to) params.set('to', to)
+  if (taskStatus) params.set('status', taskStatus)
+  if (priority) params.set('priority', priority)
+  if (subject) params.set('subject', subject)
+  if (q) params.set('q', q)
+  const query = params.toString()
+  try {
+    const { data } = await api.get('/api/weekly-tasks' + (query ? `?${query}` : ''))
+    return Array.isArray(data) ? data : []
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: weeklyTaskErrorMessage(failure, 'Không tải được việc trong tuần.') }
+  }
+}
+
+/** POST /api/weekly-tasks — tạo việc mới. */
+export async function createWeeklyTask(payload) {
+  try {
+    const { data } = await api.post('/api/weekly-tasks', weeklyTaskToPayload(payload))
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: weeklyTaskErrorMessage(failure, 'Không lưu được việc lên server. Vui lòng thử lại.') }
+  }
+}
+
+/** PUT /api/weekly-tasks/{id} — sửa việc (đổi tên, ngày, ưu tiên, trạng thái...). */
+export async function updateWeeklyTask(id, payload) {
+  try {
+    const { data } = await api.put(`/api/weekly-tasks/${encodeURIComponent(String(id || ''))}`, weeklyTaskToPayload(payload))
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: weeklyTaskErrorMessage(failure, 'Không sửa được việc trên server. Vui lòng thử lại.') }
+  }
+}
+
+/** PATCH /api/weekly-tasks/{id} — cập nhật 1 phần (VD: kéo-thả chỉ gửi {status}). Dùng payload thô. */
+export async function patchWeeklyTask(id, payload) {
+  try {
+    const { data } = await api.patch(`/api/weekly-tasks/${encodeURIComponent(String(id || ''))}`, payload)
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: weeklyTaskErrorMessage(failure, 'Không đổi được trạng thái việc trên server.') }
+  }
+}
+
+/** DELETE /api/weekly-tasks/{id} — xóa việc (204). */
+export async function deleteWeeklyTask(id) {
+  try {
+    await api.delete(`/api/weekly-tasks/${encodeURIComponent(String(id || ''))}`)
+    return null
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: weeklyTaskErrorMessage(failure, 'Không xóa được việc trên server.') }
+  }
+}
+
+/** Việc hằng ngày (daily_tasks): checkbox done + task_date cho DashboardPage. Chỉ gọi khi đã đăng nhập. */
+
+export const DAILY_TASK_PRIORITY = ['high', 'medium', 'low']
+
+function dailyTaskErrorMessage(failure, fallback) {
+  const detail = failure.response?.data?.detail
+  if (detail) return typeof detail === 'string' ? detail : 'Thông tin việc chưa hợp lệ. Kiểm tra lại các trường.'
+  if (failure.response?.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
+  return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
+}
+
+const normalizeDailyPriority = value => (value === 'high' || value === 'low' ? value : 'medium')
+const normalizeDailyDate = value => {
+  const text = String(value || '').trim().slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : ''
+}
+const todayKeyLocal = () => {
+  try {
+    return new Date().toLocaleDateString('en-CA')
+  } catch {
+    return ''
+  }
+}
+
+/** Row server {id,title,description,subject,task_date,priority,done,position} -> item UI Dashboard. */
+export function dailyTaskFromServer(row = {}) {
+  const date = String(row.task_date ?? row.date ?? '').slice(0, 10)
+  return {
+    id: row.id,
+    title: String(row.title || ''),
+    description: String(row.description || ''),
+    subject: String(row.subject || ''),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '',
+    task_date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '',
+    priority: normalizeDailyPriority(row.priority),
+    done: !!row.done,
+    position: Number.isInteger(row.position) ? row.position : Number(row.position) || 0,
+  }
+}
+
+/** Item UI -> payload POST/PUT /api/daily-tasks. task_date bắt buộc, thiếu thì lấy hôm nay. */
+export function dailyTaskToPayload(item = {}) {
+  const title = String(item.title || '').trim()
+  const description = String(item.description || '').trim().slice(0, 500)
+  const subject = String(item.subject || '').trim().slice(0, 40)
+  const date = normalizeDailyDate(item.task_date ?? item.date) || todayKeyLocal()
+  const positionRaw = Number(item.position ?? 0)
+  return {
+    title,
+    description,
+    ...(subject ? { subject } : { subject: null }),
+    task_date: date,
+    priority: normalizeDailyPriority(item.priority),
+    done: !!item.done,
+    position: Number.isInteger(positionRaw) ? Math.max(0, Math.min(10000, positionRaw)) : 0,
+  }
+}
+
+/** Gom task local cũ (kể cả shape {title,done} của `nhip-hoc-tasks`) thành payload để migrate 1 lần. */
+export function dailyTasksLocalForMigration(list = []) {
+  const today = todayKeyLocal()
+  return (Array.isArray(list) ? list : [])
+    .filter(item => item && typeof item.title === 'string' && item.title.trim())
+    .map((item, index) => dailyTaskToPayload({
+      title: item.title,
+      description: item.description || '',
+      subject: item.subject || null,
+      task_date: normalizeDailyDate(item.task_date ?? item.date) || today,
+      priority: item.priority,
+      done: !!item.done,
+      position: Number.isInteger(item.position) ? item.position : index,
+    }))
+    .filter(payload => payload.title && payload.title.length <= 160 && /^\d{4}-\d{2}-\d{2}$/.test(payload.task_date || ''))
+}
+
+/** GET /api/daily-tasks?from=&to=&priority=&done=&subject=&q= — việc của chính mình. */
+export async function fetchDailyTasks({ from, to, priority, done, subject, q } = {}) {
+  const params = new URLSearchParams()
+  if (from) params.set('from', from)
+  if (to) params.set('to', to)
+  if (priority) params.set('priority', priority)
+  if (done !== undefined && done !== null && done !== '') params.set('done', done ? 'true' : 'false')
+  if (subject) params.set('subject', subject)
+  if (q) params.set('q', q)
+  const query = params.toString()
+  try {
+    const { data } = await api.get('/api/daily-tasks' + (query ? `?${query}` : ''))
+    return Array.isArray(data) ? data : []
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: dailyTaskErrorMessage(failure, 'Không tải được việc hằng ngày.') }
+  }
+}
+
+/** POST /api/daily-tasks — tạo việc mới. */
+export async function createDailyTask(payload) {
+  try {
+    const { data } = await api.post('/api/daily-tasks', dailyTaskToPayload(payload))
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: dailyTaskErrorMessage(failure, 'Không lưu được việc lên server. Vui lòng thử lại.') }
+  }
+}
+
+/** PUT /api/daily-tasks/{id} — sửa việc (đổi tên, ngày, ưu tiên, mô tả...). */
+export async function updateDailyTask(id, payload) {
+  try {
+    const { data } = await api.put(`/api/daily-tasks/${encodeURIComponent(String(id || ''))}`, dailyTaskToPayload(payload))
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: dailyTaskErrorMessage(failure, 'Không sửa được việc trên server. Vui lòng thử lại.') }
+  }
+}
+
+/** PATCH /api/daily-tasks/{id} — cập nhật 1 phần (VD: tick checkbox chỉ gửi {done}). Dùng payload thô. */
+export async function patchDailyTask(id, payload) {
+  try {
+    const { data } = await api.patch(`/api/daily-tasks/${encodeURIComponent(String(id || ''))}`, payload)
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: dailyTaskErrorMessage(failure, 'Không đổi được trạng thái việc trên server.') }
+  }
+}
+
+/** DELETE /api/daily-tasks/{id} — xóa việc (204). */
+export async function deleteDailyTask(id) {
+  try {
+    await api.delete(`/api/daily-tasks/${encodeURIComponent(String(id || ''))}`)
+    return null
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: dailyTaskErrorMessage(failure, 'Không xóa được việc trên server.') }
   }
 }
 

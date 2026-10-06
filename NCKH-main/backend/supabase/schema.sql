@@ -1048,3 +1048,145 @@ create policy "roadmap_lessons_delete_own"
   on public.roadmap_lessons for delete
   to authenticated
   using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------
+-- 15. Bảng weekly_tasks: việc trong tuần (WeeklyTasksPage.jsx, kanban todo/doing/done).
+--     Mỗi task 1 dòng:
+--       title       : tên việc (1..120 ký tự)
+--       description : mô tả (<=500 ký tự, '' = không có)
+--       subject     : môn học, NULL = không chọn môn
+--       date        : ngày trong tuần (date, NULL = chưa hẹn ngày -> luôn hiện)
+--       priority    : 'high' | 'medium' | 'low'
+--       status      : 'todo' (Cần làm) | 'doing' (Đang làm) | 'done' (Xong)
+--     Cách chạy: dán toàn bộ file vào SQL Editor > Run (chạy lại an toàn).
+-- ---------------------------------------------------------------------
+create table if not exists public.weekly_tasks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null,
+  description text not null default '',
+  subject text,
+  date date,
+  priority text not null default 'medium',
+  status text not null default 'todo',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint weekly_tasks_title_length check (char_length(title) between 1 and 120),
+  constraint weekly_tasks_description_length check (char_length(description) <= 500),
+  constraint weekly_tasks_subject_length check (subject is null or char_length(subject) between 1 and 40),
+  constraint weekly_tasks_priority_check check (priority in ('high', 'medium', 'low')),
+  constraint weekly_tasks_status_check check (status in ('todo', 'doing', 'done'))
+);
+
+create index if not exists weekly_tasks_user_id_idx
+  on public.weekly_tasks (user_id);
+
+create index if not exists weekly_tasks_user_date_idx
+  on public.weekly_tasks (user_id, date);
+
+create index if not exists weekly_tasks_user_status_idx
+  on public.weekly_tasks (user_id, status);
+
+drop trigger if exists weekly_tasks_updated_at on public.weekly_tasks;
+create trigger weekly_tasks_updated_at
+before update on public.weekly_tasks
+for each row execute function public.set_profile_updated_at();
+
+alter table public.weekly_tasks enable row level security;
+
+drop policy if exists "weekly_tasks_select_own" on public.weekly_tasks;
+create policy "weekly_tasks_select_own"
+  on public.weekly_tasks for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "weekly_tasks_insert_own" on public.weekly_tasks;
+create policy "weekly_tasks_insert_own"
+  on public.weekly_tasks for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "weekly_tasks_update_own" on public.weekly_tasks;
+create policy "weekly_tasks_update_own"
+  on public.weekly_tasks for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "weekly_tasks_delete_own" on public.weekly_tasks;
+create policy "weekly_tasks_delete_own"
+  on public.weekly_tasks for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------
+-- 16. Bảng daily_tasks: việc cần làm hằng ngày (DashboardPage.jsx).
+--     Mỗi task 1 dòng:
+--       title       : tên việc (1..160 ký tự)
+--       description : mô tả (<=500 ký tự, '' = không có)
+--       subject     : môn học, NULL = không chọn môn (<=40 ký tự)
+--       task_date   : ngày của việc (date, BẮT BUỘC để lọc "hôm nay")
+--       priority    : 'high' | 'medium' | 'low'
+--       done        : boolean checkbox (false = chưa xong, true = đã xong)
+--       position    : thứ tự tay trong ngày (0..10000, mặc định 0)
+--     Cách chạy: dán toàn bộ file vào SQL Editor > Run (chạy lại an toàn).
+-- ---------------------------------------------------------------------
+create table if not exists public.daily_tasks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null,
+  description text not null default '',
+  subject text,
+  task_date date not null,
+  priority text not null default 'medium',
+  done boolean not null default false,
+  position integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint daily_tasks_title_length check (char_length(title) between 1 and 160),
+  constraint daily_tasks_description_length check (char_length(description) <= 500),
+  constraint daily_tasks_subject_length check (subject is null or char_length(subject) between 1 and 40),
+  constraint daily_tasks_priority_check check (priority in ('high', 'medium', 'low')),
+  constraint daily_tasks_position_check check (position between 0 and 10000)
+);
+
+create index if not exists daily_tasks_user_id_idx
+  on public.daily_tasks (user_id);
+
+create index if not exists daily_tasks_user_date_idx
+  on public.daily_tasks (user_id, task_date);
+
+create index if not exists daily_tasks_user_done_idx
+  on public.daily_tasks (user_id, done);
+
+drop trigger if exists daily_tasks_updated_at on public.daily_tasks;
+create trigger daily_tasks_updated_at
+before update on public.daily_tasks
+for each row execute function public.set_profile_updated_at();
+
+alter table public.daily_tasks enable row level security;
+
+drop policy if exists "daily_tasks_select_own" on public.daily_tasks;
+create policy "daily_tasks_select_own"
+  on public.daily_tasks for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "daily_tasks_insert_own" on public.daily_tasks;
+create policy "daily_tasks_insert_own"
+  on public.daily_tasks for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "daily_tasks_update_own" on public.daily_tasks;
+create policy "daily_tasks_update_own"
+  on public.daily_tasks for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "daily_tasks_delete_own" on public.daily_tasks;
+create policy "daily_tasks_delete_own"
+  on public.daily_tasks for delete
+  to authenticated
+  using (auth.uid() = user_id);

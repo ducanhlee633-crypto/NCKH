@@ -18,3 +18,28 @@
 .emoji-custom label{flex:1}
 .emoji-error{margin:6px 0 0;color:#c0392b;font-size:12px;font-weight:700}
 @media(max-width:760px){.emoji-grid{grid-template-columns:repeat(8,minmax(0,1fr))}.emoji-custom{flex-direction:column;align-items:stretch}}
+
+/* --- Goals refined: no per-card progress, clearer meta layout --- */
+.goals-overview.goals-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}
+.goals-stat{display:grid;place-items:center;gap:2px;padding:18px 10px;background:#fff;border:2px solid hsl(var(--accent-hue,216) 80% 93%);border-radius:20px;text-align:center}
+.goals-stat b{color:var(--ink);font:800 30px/1 'Baloo 2'}
+.goals-stat span{color:#728097;font-size:11px;font-weight:800}
+.goals-stat.is-doing b{color:hsl(var(--accent-hue,216) 65% 48%)}
+.goals-stat.is-done b{color:#1d9e78}
+.goal-card{display:flex;flex-direction:column}
+.goal-card.is-completed{border-top-color:#5fd3ab;background:linear-gradient(180deg,#f3fdf9 0,#fff 55%)}
+.goal-status{padding:7px 12px;border-radius:999px;font-size:11px;font-weight:900;white-space:nowrap}
+.goal-status.is-doing{color:hsl(var(--accent-hue,216) 65% 45%);background:hsl(var(--accent-hue,216) 100% 94%)}
+.goal-status.is-done{color:#0f7a5c;background:#d3f6e7}
+.goal-card h3{min-height:0;margin:16px 0 14px}
+.goal-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0;padding:14px;background:hsl(var(--accent-hue,216) 80% 98%);border:1px solid hsl(var(--accent-hue,216) 80% 93%);border-radius:16px}
+.goal-meta>div{min-width:0}
+.goal-meta dt{color:#8793a7;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+.goal-meta dd{margin:3px 0 0;color:#33415c;font-size:13px;font-weight:800}
+.goal-meta dd.is-overdue{color:#c0392b}
+.goal-foot{display:flex;flex-direction:column;gap:10px;margin-top:auto;padding-top:16px}
+.goal-actions{display:flex;gap:10px}
+.goal-actions .ghost-button,.goal-actions .outline-button{flex:1}
+.goal-delete{align-self:center;padding:4px 8px;background:none;border:0;color:#a3adbf;font-size:12px;font-weight:700;cursor:pointer}
+.goal-delete:hover{color:#c0392b;text-decoration:underline}
+@media(max-width:760px){.goals-overview.goals-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.goals-stat{padding:14px 6px}.goals-stat b{font-size:24px}.goal-meta{grid-template-columns:1fr 1fr}}
