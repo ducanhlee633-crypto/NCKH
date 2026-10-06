@@ -154,6 +154,7 @@ frontend/
 | Backend báo thiếu `SUPABASE_SERVICE_ROLE_KEY` | Điền key vào `backend/.env` (không commit file này) |
 | Frontend gọi `/api` 404 / CORS | Đảm bảo backend chạy ở `127.0.0.1:8000`, hoặc set `BACKEND_URL` khi chạy Vite |
 | Đăng nhập xong vẫn về trang login | Kiểm tra Supabase Auth (confirm email, anon key đúng project) |
+| Bấm link xác nhận email không về app/onboarding | Supabase Dashboard > Authentication > URL Configuration: Site URL = domain frontend, Redirect URLs thêm `https://<domain>/?verified=1` (local: `http://localhost:5173/?verified=1`); backend set `FRONTEND_URL` trùng domain |
 | `npm run build` lỗi | `node -v` phải ≥ 20; xóa `node_modules` rồi `npm install` lại |
 
 ## Tài liệu liên quan

@@ -34,6 +34,12 @@ class ResetPasswordRequest(BaseModel):
     email: str = Field(min_length=5, max_length=254)
 
 
+class VerifyCallbackRequest(BaseModel):
+    """Đổi `code` trong link xác nhận email (luồng PKCE) lấy session."""
+
+    code: str = Field(min_length=10, max_length=4096)
+
+
 class PasswordChange(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 

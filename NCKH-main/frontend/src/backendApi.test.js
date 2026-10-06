@@ -4,9 +4,11 @@ import api, {
   aiMessageFromServer,
   aiSessionTitleFromText,
   clearSession,
+  consumeEmailConfirmationCallback,
   createAiMessage,
   createAiSession,
   createScheduleBlock,
+  decodeJwtPayload,
   deleteAiSession,
   deleteScheduleBlock,
   displayUser,
@@ -16,9 +18,11 @@ import api, {
   getSession,
   loginUser,
   logoutUser,
+  parseEmailConfirmationCallback,
   registerUser,
   requestPasswordReset,
   changePassword,
+  saveSessionFromHashTokens,
   updateScheduleBlock,
   SESSION_KEY,
 } from './backendApi.js'
@@ -221,4 +225,54 @@ test('sửa block (PATCH) gửi đúng scope và query day', async () => {
   await updateScheduleBlock('block-9', { title: 'Lẻ' }, { scope: 'single', day: '2026-10-12' })
   assert.equal(requests[1].url, '/api/schedule/block-9?scope=single&day=2026-10-12')
   assert.equal(requests[1].method, 'put')
+})
+
+const b64url = (obj) => Buffer.from(JSON.stringify(obj), 'utf8').toString('base64url')
+const fakeJwt = (payload) => `eyJhbGciOiJIUzI1NiJ9.${b64url(payload)}.signature`
+
+test('parse callback xác nhận email: session/code/verified/error/none', () => {
+  // Luồng mặc định: token nằm trong hash fragment.
+  const session = parseEmailConfirmationCallback({
+    search: '?verified=1',
+    hash: '#access_token=tok123&refresh_token=ref123&expires_in=3600&type=signup',
+  })
+  assert.equal(session.kind, 'session')
+  assert.equal(session.access_token, 'tok123')
+
+  // Luồng PKCE: code nằm trong query.
+  const code = parseEmailConfirmationCallback({ search: '?code=pkce-code-1&type=signup', hash: '' })
+  assert.deepEqual(code, { kind: 'code', code: 'pkce-code-1' })
+
+  // Đã xác nhận nhưng không kèm session (VD: bấm link lần 2).
+  assert.deepEqual(parseEmailConfirmationCallback({ search: '?verified=1', hash: '' }), { kind: 'verified' })
+
+  // Link lỗi/hết hạn (trong query hoặc hash).
+  const err = parseEmailConfirmationCallback({ search: '?error=access_denied&error_description=Link%20expired', hash: '' })
+  assert.equal(err.kind, 'error')
+  assert.equal(err.description, 'Link expired')
+
+  // URL thường không có callback.
+  assert.deepEqual(parseEmailConfirmationCallback({ search: '', hash: '#dashboard' }), { kind: 'none' })
+  assert.deepEqual(parseEmailConfirmationCallback(), { kind: 'none' })
+
+  // Không có window.location (SSR/test) -> consume trả none, không throw.
+  assert.deepEqual(consumeEmailConfirmationCallback(), { kind: 'none' })
+})
+
+test('token hash xác nhận mail dựng được session để App đẩy vào onboarding', () => {
+  clearSession()
+  const jwt = fakeJwt({ sub: 'user-1', email: 'minhanh@example.com' })
+  assert.deepEqual(decodeJwtPayload(jwt), { sub: 'user-1', email: 'minhanh@example.com' })
+  assert.equal(decodeJwtPayload('not-a-jwt'), null)
+
+  const saved = saveSessionFromHashTokens({ access_token: jwt, refresh_token: 'ref-1', expires_in: 3600 })
+  assert.ok(saved)
+  assert.equal(getSession().user.id, 'user-1')
+  assert.equal(displayUser(getSession()).email, 'minhanh@example.com')
+
+  // Token thiếu sub -> không dựng session.
+  clearSession()
+  assert.equal(saveSessionFromHashTokens({ access_token: fakeJwt({}) }), null)
+  assert.equal(getSession(), null)
+  clearSession()
 })

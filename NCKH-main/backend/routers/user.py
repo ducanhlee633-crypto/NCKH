@@ -16,6 +16,7 @@ from schema import (
     Token,
     UserPrivate,
     UserPublic,
+    VerifyCallbackRequest,
 )
 from supabase_client import get_supabase_admin, get_supabase_anon
 
@@ -195,24 +196,46 @@ def _to_token(session, profile_row: dict | None) -> Token:
 # ---------------- Auth (ủy thác hoàn toàn cho Supabase Auth) ----------------
 
 
+def _email_confirm_redirect() -> str | None:
+    """Nơi Supabase dẫn về sau khi user bấm link xác nhận email.
+
+    Trả về `{FRONTEND_URL}/?verified=1` để frontend tự đăng nhập (token trong
+    hash hoặc `code` PKCE) rồi đẩy tiếp vào onboarding. Chưa cấu hình
+    FRONTEND_URL -> None (Supabase dùng Site URL mặc định trong Dashboard).
+    """
+    try:
+        base = (get_settings().frontend_url or "").strip().rstrip("/")
+    except Exception:
+        return None
+    if not base:
+        return None
+    return f"{base}/?verified=1"
+
+
 @auth_router.post("/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
 def signup(payload: SignupRequest) -> Token:
     username = _clean_username(payload.username) if payload.username else None
     nickname = _clean_nickname(payload.nickname) if payload.nickname else None
     grade = _clean_grade(payload.grade) if payload.grade else None
+    signup_options: dict = {
+        "data": {
+            "username": username,
+            "name": payload.name.strip(),
+            "nickname": nickname,
+            "grade": grade,
+        }
+    }
+    # Bấm link xác nhận trong mail -> Supabase dẫn thẳng về frontend
+    # (kèm session trong hash hoặc `code`), frontend tự vào onboarding.
+    confirm_redirect = _email_confirm_redirect()
+    if confirm_redirect:
+        signup_options["email_redirect_to"] = confirm_redirect
     try:
         response = get_supabase_anon().auth.sign_up(
             {
                 "email": payload.email.strip(),
                 "password": payload.password,
-                "options": {
-                    "data": {
-                        "username": username,
-                        "name": payload.name.strip(),
-                        "nickname": nickname,
-                        "grade": grade,
-                    }
-                },
+                "options": signup_options,
             }
         )
     except HTTPException:
@@ -262,6 +285,34 @@ def refresh(payload: RefreshRequest) -> Token:
     if not response.session or not response.user:
         raise unauthorized("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.")
     profile = _fetch_profile(UUID(str(response.user.id)))
+    return _to_token(response.session, profile)
+
+
+@auth_router.post("/callback", response_model=Token)
+def exchange_confirmation_code(payload: VerifyCallbackRequest) -> Token:
+    """Đổi `code` trong link xác nhận email (luồng PKCE) lấy session.
+
+    Frontend gọi endpoint này khi Supabase đáp về `/?code=...` sau khi user bấm
+    link xác nhận trong mail. Có session -> App tự đẩy tiếp vào onboarding.
+    """
+    try:
+        response = get_supabase_anon().auth.exchange_code_for_session({"auth_code": payload.code})
+    except HTTPException:
+        raise
+    except Exception as error:
+        if "expir" in str(error).lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Liên kết xác nhận đã hết hạn. Vui lòng đăng nhập hoặc đăng ký lại.",
+            ) from error
+        code, detail = _supabase_error_status(error)
+        raise HTTPException(status_code=code, detail=detail) from error
+    if not response.session or not response.user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Liên kết xác nhận không hợp lệ hoặc đã hết hạn.",
+        )
+    profile = _ensure_profile(UUID(str(response.user.id)), None, "")
     return _to_token(response.session, profile)
 
 

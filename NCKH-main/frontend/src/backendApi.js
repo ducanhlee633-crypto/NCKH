@@ -167,6 +167,117 @@ export async function requestPasswordReset(email) {
   await api.post('/api/auth/reset-password', { email: email.trim() })
 }
 
+/** Parse chuỗi query (`?a=1&b=2`) hoặc fragment (`#a=1&b=2`) thành object. */
+function parseUrlParams(text) {
+  const out = {}
+  for (const chunk of String(text || '').split('&')) {
+    if (!chunk) continue
+    const eq = chunk.indexOf('=')
+    const rawKey = eq < 0 ? chunk : chunk.slice(0, eq)
+    const rawValue = eq < 0 ? '' : chunk.slice(eq + 1)
+    try {
+      const key = decodeURIComponent(rawKey)
+      if (!(key in out)) out[key] = decodeURIComponent(rawValue)
+    } catch { /* bỏ qua chunk mã hóa lỗi */ }
+  }
+  return out
+}
+
+function base64UrlDecodeText(part) {
+  const normalized = String(part || '').replace(/-/g, '+').replace(/_/g, '/')
+  if (typeof Buffer !== 'undefined' && typeof Buffer.from === 'function') {
+    return Buffer.from(normalized, 'base64').toString('utf8')
+  }
+  const binary = atob(normalized)
+  const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0))
+  return new TextDecoder().decode(bytes)
+}
+
+/** Giải mã payload JWT (không verify — backend mới là nguồn sự thật khi gọi API). */
+export function decodeJwtPayload(token) {
+  try {
+    const part = String(token || '').split('.')[1]
+    if (!part) return null
+    return JSON.parse(base64UrlDecodeText(part))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Đọc callback xác nhận email của Supabase trên URL hiện tại.
+ * - Luồng mặc định: `/?verified=1#access_token=..&refresh_token=..&type=signup`
+ * - Luồng PKCE: `/?code=..&type=signup`
+ * - Link lỗi/hết hạn: `?error=..&error_description=..` (trong query hoặc hash)
+ * Trả về {kind:'session'|'code'|'verified'|'error'|'none', ...}.
+ */
+export function parseEmailConfirmationCallback({ search = '', hash = '' } = {}) {
+  const query = parseUrlParams(String(search || '').startsWith('?') ? String(search).slice(1) : search)
+  const fragment = parseUrlParams(String(hash || '').startsWith('#') ? String(hash).slice(1) : hash)
+  const error = fragment.error || query.error
+  if (error) {
+    return { kind: 'error', error, description: fragment.error_description || query.error_description || '' }
+  }
+  if (fragment.access_token) {
+    return {
+      kind: 'session',
+      access_token: fragment.access_token,
+      refresh_token: fragment.refresh_token || null,
+      expires_in: Number(fragment.expires_in) > 0 ? Number(fragment.expires_in) : 3600,
+    }
+  }
+  if (query.code) return { kind: 'code', code: query.code }
+  if (query.verified || query.type === 'signup' || fragment.type === 'signup') return { kind: 'verified' }
+  return { kind: 'none' }
+}
+
+/**
+ * Đọc + dọn callback xác nhận email khỏi thanh địa chỉ (tránh lộ token khi
+ * copy/share link). Trả về kết quả của parseEmailConfirmationCallback.
+ */
+export function consumeEmailConfirmationCallback() {
+  if (typeof window === 'undefined' || !window.location) return { kind: 'none' }
+  const result = parseEmailConfirmationCallback({
+    search: window.location.search || '',
+    hash: window.location.hash || '',
+  })
+  if (result.kind === 'none') return result
+  try {
+    const url = new URL(window.location.href)
+    url.search = ''
+    // Token/code/error là dữ liệu nhạy cảm hoặc dùng 1 lần -> xóa khỏi URL.
+    if (result.kind !== 'verified') url.hash = ''
+    window.history.replaceState(null, '', url.toString())
+  } catch { /* giữ URL cũ khi trình duyệt không hỗ trợ */ }
+  return result
+}
+
+/** Dựng + lưu session từ token hash Supabase trả sau khi bấm link xác nhận mail. */
+export function saveSessionFromHashTokens({ access_token, refresh_token, expires_in } = {}) {
+  if (!access_token) return null
+  const claims = decodeJwtPayload(access_token)
+  const userId = claims?.sub
+  if (!userId) return null
+  return saveSession({
+    access_token,
+    refresh_token: refresh_token || null,
+    expires_in: Number(expires_in) > 0 ? Number(expires_in) : 3600,
+    token_type: 'bearer',
+    user: { id: userId, email: claims?.email || null },
+    profile: null,
+  })
+}
+
+/** Đổi `code` xác nhận mail (PKCE) lấy session qua backend rồi lưu lại. */
+export async function exchangeEmailConfirmationCode(code) {
+  try {
+    const { data } = await api.post('/api/auth/callback', { code: String(code || '') })
+    return saveSession(data)
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: failure.response?.data?.detail || 'Liên kết xác nhận không hợp lệ hoặc đã hết hạn.' }
+  }
+}
+
 /** Đổi mật khẩu khi đang đăng nhập. */
 export async function changePassword(newPassword) {
   try {

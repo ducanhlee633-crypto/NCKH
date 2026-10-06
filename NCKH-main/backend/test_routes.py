@@ -200,6 +200,34 @@ class SupabaseAuthRoutesTest(unittest.TestCase):
             self.assertEqual(deleted.status_code, 204)
             admin.auth.admin.delete_user.assert_called_once_with(user_id)
 
+    def test_confirmation_code_callback_returns_session(self):
+        store: dict = {}
+        user_id = str(uuid4())
+        email = "xac.nhan@example.com"
+        admin = _make_admin_mock(store)
+        anon = MagicMock()
+        anon.auth.exchange_code_for_session.return_value = _auth_response(user_id, email)
+
+        with patch("routers.user.get_supabase_admin", return_value=admin), patch(
+            "routers.user.get_supabase_anon", return_value=anon
+        ):
+            client = TestClient(app)
+            # Đổi code hợp lệ -> có session để frontend vào onboarding ngay.
+            ok = client.post("/api/auth/callback", json={"code": "valid-pkce-code-123"})
+            self.assertEqual(ok.status_code, 200, ok.text)
+            self.assertEqual(ok.json()["access_token"], "supabase-access-token")
+            self.assertEqual(ok.json()["user"]["id"], user_id)
+            anon.auth.exchange_code_for_session.assert_called_once_with({"auth_code": "valid-pkce-code-123"})
+
+            # Code hết hạn -> 400 với message tiếng Việt.
+            anon.auth.exchange_code_for_session.side_effect = Exception("code expired")
+            expired = client.post("/api/auth/callback", json={"code": "expired-code-123"})
+            self.assertEqual(expired.status_code, 400)
+            self.assertIn("hết hạn", expired.json()["detail"])
+
+            # Code quá ngắn -> 422 validate.
+            self.assertEqual(client.post("/api/auth/callback", json={"code": "short"}).status_code, 422)
+
     def test_reset_password_always_accepted_to_prevent_email_enumeration(self):
         anon = MagicMock()
         with patch("routers.user.get_supabase_anon", return_value=anon):

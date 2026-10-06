@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     # Nếu để trống, backend sẽ verify token bằng cách gọi Supabase Auth API (chậm hơn nhưng vẫn an toàn).
     supabase_jwt_secret: str | None = Field(default=None, validation_alias="SUPABASE_JWT_SECRET")
     auto_confirm_email: bool = Field(default=False, validation_alias="AUTO_CONFIRM_EMAIL")
+    # Domain frontend để Supabase dẫn về sau khi user bấm link xác nhận email.
+    # Ví dụ: FRONTEND_URL=https://nhip-hoc.vercel.app (local: http://localhost:5173).
+    # Phải trùng Site URL / Redirect URLs trong Supabase Dashboard > Authentication > URL Configuration.
+    frontend_url: str = Field(default="", validation_alias="FRONTEND_URL")
     # OpenRouter (chat AI). Key chỉ nằm ở backend, không bao giờ lộ ra frontend.
     openrouter_api_key: str | None = Field(default=None, validation_alias="OPENROUTER_API_KEY")
     openrouter_model: str = Field(

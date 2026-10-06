@@ -4,12 +4,12 @@ import Icon from '../components/Icon'
 import '../styles/public-pages.css'
 import '../styles/auth.css'
 
-export default function AuthPage({ mode = 'login', onNavigate }) {
+export default function AuthPage({ mode = 'login', verified = false, callbackError = '', onNavigate }) {
   const registering = mode === 'register'
   const forgot = mode === 'forgot'
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
+  const [error, setError] = useState(callbackError)
+  const [notice, setNotice] = useState(verified ? 'Email đã được xác nhận! Hãy đăng nhập để bắt đầu làm quen với Nhịp Học.' : '')
   const [showPassword, setShowPassword] = useState(false)
 
   function failureMessage(failure) {
