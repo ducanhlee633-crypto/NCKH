@@ -1,0 +1,410 @@
+/* Mobile app-shell: bottom tab + sheet "Thêm" + fix tràn cho cả 12 trang.
+   Phạm vi đã chốt: chỉ fix responsive, giữ design system "Sổ học tập",
+   ưu tiên iPhone Safari + Android Chrome 360/390/412px, chưa làm PWA. */
+
+/* Chống tràn ngang toàn app (cả desktop lẫn mobile). */
+.app-shell, .workspace, .main-content,
+.dashboard-card, .page-intro, .study-notebook,
+.schedule-layout, .stats-grid, .friends-layout, .help-grid,
+.settings-grid, .focus-layout, .ai-layout, .roadmap-bottom-grid {
+  min-width: 0;
+}
+img, video, canvas, svg, table {
+  max-width: 100%;
+}
+table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Desktop: ẩn nav mobile. */
+.mobile-bottom-nav,
+.mobile-more-sheet,
+.mobile-more-backdrop {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  /* 1. Ẩn sidebar desktop (thay bằng bottom tab), giữ lại cho print/a11y. */
+  .sidebar,
+  .sidebar-collapse-btn,
+  .sidebar-toggle {
+    display: none !important;
+  }
+  .workspace {
+    margin-left: 0 !important;
+  }
+  .app-shell.sidebar-collapsed .workspace {
+    margin-left: 0 !important;
+  }
+
+  /* 2. Header mobile gọn, sticky như app. */
+  .study-header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    min-height: 56px;
+    padding: 8px 14px;
+    padding-top: calc(8px + env(safe-area-inset-top, 0px));
+    gap: 8px;
+  }
+  .study-breadcrumb {
+    gap: 6px;
+    font-size: 11px;
+    min-width: 0;
+    flex: 1;
+  }
+  .study-breadcrumb > span:first-of-type {
+    display: none;
+  }
+  .study-breadcrumb b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .auth-account {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .auth-account > span {
+    display: none;
+  }
+  .auth-account .ghost-button {
+    min-height: 36px;
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+  .student-profile-chip {
+    min-height: 36px;
+    padding: 6px 10px;
+    font-size: 11px;
+    max-width: 132px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .student-profile-chip svg {
+    display: none;
+  }
+  .focus-mini-badge {
+    min-height: 36px;
+    font-size: 11px;
+  }
+
+  /* 3. Nội dung chừa chỗ cho bottom tab + tai thỏ. */
+  .main-content {
+    padding: 18px 14px calc(96px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .page-intro h1, .simple-heading h1, .settings-heading h1 {
+    font-size: 26px !important;
+    line-height: 1.25;
+  }
+  .page-subtitle {
+    font-size: 13px;
+  }
+
+  /* 4. Bottom tab bar chuẩn app: 5 tab, cao 64px + safe-area. */
+  .mobile-bottom-nav {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+    background: color-mix(in srgb, var(--card) 92%, transparent);
+    background: var(--card);
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -8px 24px rgba(38, 89, 177, 0.08);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  .mobile-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-height: 56px;
+    padding: 6px 2px;
+    color: var(--muted, #69748a);
+    background: transparent;
+    border: 0;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+  .mobile-tab-icon {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 28px;
+    border-radius: 999px;
+  }
+  .mobile-tab.active {
+    color: var(--blue);
+  }
+  .mobile-tab.active .mobile-tab-icon {
+    background: var(--surface-soft, #eef4ff);
+  }
+  .mobile-tab-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* 5. Sheet "Thêm": bottom-sheet vuốt như app. */
+  .mobile-more-backdrop {
+    display: block !important;
+    position: fixed;
+    inset: 0;
+    z-index: 51;
+    background: rgba(20, 41, 71, 0.4);
+    backdrop-filter: blur(2px);
+  }
+  .mobile-more-sheet {
+    display: block !important;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 52;
+    max-height: 78vh;
+    overflow-y: auto;
+    padding: 8px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+    background: var(--card);
+    border-top: 1px solid var(--line);
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -16px 40px rgba(38, 89, 177, 0.18);
+    transform: translateY(105%);
+    transition: transform 0.26s ease;
+    visibility: hidden;
+  }
+  .mobile-more-sheet.open {
+    transform: translateY(0);
+    visibility: visible;
+  }
+  .mobile-more-handle {
+    width: 40px;
+    height: 4px;
+    margin: 4px auto 10px;
+    background: var(--line);
+    border-radius: 999px;
+  }
+  .mobile-more-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 2px 10px;
+  }
+  .mobile-more-head b {
+    font-size: 15px;
+  }
+  .mobile-more-close {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    color: var(--muted, #69748a);
+    background: var(--canvas, #f3f8ff);
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    font-size: 20px;
+  }
+  .mobile-more-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .mobile-more-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 52px;
+    padding: 10px 12px;
+    color: var(--ink);
+    background: var(--canvas, #f3f8ff);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    font-size: 13px;
+    font-weight: 800;
+    text-align: left;
+  }
+  .mobile-more-item.active {
+    color: var(--blue);
+    border-color: var(--blue);
+  }
+  .mobile-more-icon {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+
+  /* 6. Fix chung cả 12 trang: 1 cột, hết tràn, nút bấm được. */
+  .dashboard-card {
+    padding: 18px 14px !important;
+    border-radius: 18px !important;
+  }
+  .card-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .study-notebook {
+    grid-template-columns: 1fr !important;
+  }
+  .study-summary {
+    grid-template-columns: 1fr !important;
+  }
+  .student-dashboard-grid,
+  .schedule-layout,
+  .stats-grid,
+  .friends-layout,
+  .help-grid,
+  .settings-grid,
+  .focus-layout,
+  .ai-layout,
+  .roadmap-bottom-grid,
+  .stage-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .week-grid {
+    grid-template-columns: 56px repeat(5, minmax(64px, 1fr)) !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .heatmap-grid {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .metric-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .page-intro, .simple-heading, .settings-heading {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+  .intro-actions {
+    width: 100%;
+    justify-content: stretch !important;
+  }
+  .intro-actions > * {
+    flex: 1 1 auto;
+  }
+
+  /* Nút + input chuẩn app: cao ≥44px, chữ 16px chống zoom iOS. */
+  button, .primary-button, .ghost-button, .gold-button, .success-button,
+  .outline-button, .small-action {
+    min-height: 44px;
+  }
+  input, select, textarea,
+  .field-grid input, .field-grid select,
+  .app-modal input, .app-modal select, .app-modal textarea,
+  .quick-add input, .ai-chat .chat-composer input,
+  .ai-widget-composer input, .search-box input {
+    font-size: 16px !important;
+  }
+  .quick-add {
+    flex-wrap: wrap;
+  }
+  .quick-add input {
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
+  .quick-add button {
+    width: 100%;
+    min-height: 44px;
+  }
+  .segmented-control {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .segmented-control button {
+    flex: 1 0 auto;
+    min-height: 44px;
+  }
+
+  /* Pomodoro / timer không tràn 360px. */
+  .focus-ring, .timer-ring {
+    width: min(100%, 260px) !important;
+    height: auto !important;
+    aspect-ratio: 1;
+  }
+  .focus-ring > div, .timer-ring > div {
+    width: 86% !important;
+    height: 86% !important;
+  }
+  .timer-actions, .focus-actions {
+    flex-wrap: wrap;
+  }
+  .timer-actions .primary-button, .focus-actions .primary-button {
+    flex: 1 1 100%;
+  }
+
+  /* Chat AI + widget không bị tab đáy che. */
+  .ai-chat {
+    min-height: 480px !important;
+  }
+  .ai-messages {
+    height: 300px !important;
+  }
+  .ai-widget-fab {
+    width: 56px !important;
+    height: 56px !important;
+  }
+  .ai-widget-panel {
+    max-height: calc(100vh - 180px) !important;
+  }
+  .chat-composer {
+    position: static !important;
+  }
+
+  /* Modal full-width như sheet trên điện thoại nhỏ. */
+  .app-modal {
+    width: calc(100% - 24px) !important;
+    padding: 20px 16px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .main-content {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  .mobile-tab {
+    font-size: 9px;
+  }
+  .mobile-tab-icon {
+    width: 38px;
+  }
+  .mobile-more-list {
+    grid-template-columns: 1fr;
+  }
+  .metric-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .week-strip {
+    gap: 4px !important;
+  }
+  .study-summary-item b {
+    font-size: 22px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-more-sheet {
+    transition: none;
+  }
+}

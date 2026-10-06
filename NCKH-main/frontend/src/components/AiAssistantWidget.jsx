@@ -26,10 +26,10 @@ export default function AiAssistantWidget() {
   const [messages, setMessages] = useState(() => [toUiMessage('assistant', GREETING)])
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
-  // Robot bắt đầu ở góc phải-dưới, người dùng nhấn giữ để kéo đi khắp màn hình.
+  // Robot bắt đầu ở góc phải-dưới, chừa chỗ cho bottom tab mobile.
   const [pos, setPos] = useState(() => ({
     x: Math.max(PAD, window.innerWidth - FAB - 20),
-    y: Math.max(PAD, window.innerHeight - FAB - 20),
+    y: Math.max(PAD, window.innerHeight - FAB - (window.innerWidth <= 760 ? 96 : 20)),
   }))
   const [viewport, setViewport] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }))
   const [dragging, setDragging] = useState(false)

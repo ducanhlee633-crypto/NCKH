@@ -15,6 +15,8 @@ from .user import auth_router, router as user_router
 from .user_preferences import router as preferences_router
 from .weekly_tasks import router as weekly_tasks_router
 from .onboarding import router as onboarding_router
+from .wellbeing import router as wellbeing_router
+from .wellbeing_ai import router as wellbeing_ai_router
 
 router = APIRouter()
 router.include_router(ai_router)
@@ -33,3 +35,5 @@ router.include_router(goals_router)
 router.include_router(roadmaps_router)
 router.include_router(weekly_tasks_router)
 router.include_router(onboarding_router)
+router.include_router(wellbeing_router)
+router.include_router(wellbeing_ai_router)

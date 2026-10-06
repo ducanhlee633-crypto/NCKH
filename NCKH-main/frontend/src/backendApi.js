@@ -1324,4 +1324,50 @@ export async function completeOnboarding({ grade, aiTone, weeklyHours, goals } =
   }
 }
 
+/** Nhịp học tập (wellbeing): Chỉ số Tải học tập 0-100, rule-based, giải thích được. */
+
+function wellbeingErrorMessage(failure, fallback) {
+  const detail = failure.response?.data?.detail
+  if (detail) return typeof detail === 'string' ? detail : 'Số liệu chưa hợp lệ. Kiểm tra lại.'
+  if (failure.response?.status === 401) return 'Hãy đăng nhập để xem nhịp của bạn.'
+  return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
+}
+
+/** GET /api/wellbeing/stress — điểm tải 14 ngày gần nhất của chính mình (cần đăng nhập). */
+export async function fetchStress() {
+  try {
+    const { data } = await api.get('/api/wellbeing/stress')
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: wellbeingErrorMessage(failure, 'Không tính được nhịp học.') }
+  }
+}
+
+/** POST /api/wellbeing-ai/analyze — AI phân tích từ dữ liệu DB thật (cần đăng nhập). */
+export async function fetchWellbeingAdvice(note = '') {
+  try {
+    // Model free thường trả lời 20-60s nên phải nới timeout như chat (60s) / roadmap (210s).
+    const { data } = await api.post('/api/wellbeing-ai/analyze', { note: String(note || '') }, { timeout: 90000 })
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: wellbeingErrorMessage(failure, 'AI chưa phân tích được. Thử lại nhé.') }
+  }
+}
+
+/** POST /api/wellbeing/stress/preview — tính thử từ số liệu thủ công (không cần đăng nhập). */
+export async function previewStress(form = {}) {
+  const payload = {
+    deadline_count: Number(form.deadline_count ?? 0),
+    weekly_pending: Number(form.weekly_pending ?? 0),
+    night_sessions: Number(form.night_sessions ?? 0),
+    today_pending: Number(form.today_pending ?? 0),
+  }
+  try {
+    const { data } = await api.post('/api/wellbeing/stress/preview', payload)
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: wellbeingErrorMessage(failure, 'Không tính thử được.') }
+  }
+}
+
 export default api

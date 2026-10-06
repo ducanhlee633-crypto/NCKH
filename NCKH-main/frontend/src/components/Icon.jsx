@@ -6,6 +6,7 @@ const paths = {
   roadmap: 'M6 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z M18 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z M8 5h7a4 4 0 0 1 0 8H9a3 3 0 0 0 0 6h7',
   goals: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Z M12 11v2',
   stats: 'M4 3v17h17 M8 15v-4 M13 15V7 M18 15V4',
+  wellbeing: 'M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10Z M4 12h3l2-3 3 6 2-3h6',
   friends: 'M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z M2 21v-3a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v3 M17 4a4 4 0 0 1 0 7 M18 14a5 5 0 0 1 4 5v2',
   settings: 'M4 6h16 M4 12h16 M4 18h16 M8 3v6 M16 9v6 M10 15v6',
   help: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z M9.5 9a2.5 2.5 0 1 1 4 2c-1 .6-1.5 1-1.5 3 M12 17h.01',
@@ -17,6 +18,7 @@ const paths = {
   'weekly-tasks': 'M4 6h16 M4 12h10 M4 18h7 M15 14l6 6 M21 14l-6 6',
   'sidebar-collapse': 'M4 5h16v14H4z M9 5v14 M13 10l-2 2 2 2',
   'sidebar-expand': 'M4 5h16v14H4z M9 5v14 M11 10l2 2-2 2',
+  more: 'M5 12h.01 M12 12h.01 M19 12h.01',
 }
 
 export default function Icon({ name, size = 20 }) {

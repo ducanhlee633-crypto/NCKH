@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
+import MobileNav from './MobileNav'
 import useStoredState from '../data/useStoredState'
 
 export default function AppShell({ currentPage, onNavigate, children, user, onLogout }) {
@@ -26,6 +27,7 @@ export default function AppShell({ currentPage, onNavigate, children, user, onLo
         <Topbar currentPage={currentPage} onNavigate={onNavigate} user={user} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
         <main className="main-content" id="main-content" tabIndex={-1}>{children}</main>
       </div>
+      <MobileNav currentPage={currentPage} onNavigate={onNavigate} />
     </div>
   )
 }

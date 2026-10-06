@@ -7,6 +7,7 @@ export const navigationItems = [
   { label: 'Lộ trình học', path: 'roadmap' },
   { label: 'Mục tiêu', path: 'goals' },
   { label: 'Tiến bộ của bạn', path: 'stats' },
+  { label: 'Nhịp học tập', path: 'wellbeing' },
   { label: 'Bạn bè', path: 'friends' },
 ]
 

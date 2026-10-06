@@ -23,6 +23,7 @@ import AiAssistantWidget from './components/AiAssistantWidget'
 import PomodoroPage from './pages/PomodoroPage'
 import RoadmapPage from './pages/RoadmapPage'
 import StatsPage from './pages/StatsPage'
+import WellbeingPage from './pages/WellbeingPage'
 import FriendsPage from './pages/FriendsPage'
 import SettingsPage from './pages/SettingsPage'
 import HelpPage from './pages/HelpPage'
@@ -31,6 +32,7 @@ import OnboardingPage from './pages/OnboardingPage'
 import './styles/goals.css'
 import './styles/onboarding.css'
 import './styles/student-design.css'
+import './styles/mobile-app.css'
 import { applySettings, loadSettings, persistSettings } from './data/settings'
 
 const pageMap = {
@@ -44,6 +46,7 @@ const pageMap = {
   goals: GoalsPage,
   goal: GoalsPage,
   stats: StatsPage,
+  wellbeing: WellbeingPage,
   friends: FriendsPage,
   settings: SettingsPage,
   help: HelpPage,
