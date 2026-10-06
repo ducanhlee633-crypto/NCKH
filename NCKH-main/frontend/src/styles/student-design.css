@@ -317,3 +317,27 @@ html[data-theme="dark"] .ai-banner h1 { color: white; }
   .study-header { display: none; }
   .study-notebook, .study-summary-item, .focus-invitation { break-inside: avoid; }
 }
+
+/* Nút thu/mở sidebar — thu sidebar để mở rộng vùng đọc bên phải khi cần. */
+.sidebar { transition: transform .28s ease, visibility .28s ease; }
+.workspace { transition: margin-left .28s ease; }
+.study-header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sidebar-toggle { display: inline-grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; color: var(--blue); background: var(--surface-soft); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; transition: background .15s, transform .15s; }
+.sidebar-toggle:hover { background: var(--card); transform: translateY(-1px); }
+.sidebar-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.sidebar-collapse-btn { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 32px; height: 32px; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 9px; cursor: pointer; }
+.sidebar-collapse-btn:hover { color: var(--blue); background: var(--surface-soft); border-color: var(--line); }
+.sidebar-collapse-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.app-shell.sidebar-collapsed .sidebar { transform: translateX(-105%); visibility: hidden; }
+.app-shell.sidebar-collapsed .workspace { margin-left: 0; }
+.app-shell.sidebar-collapsed .main-content { max-width: 1560px; }
+@media (max-width: 760px) {
+  /* Mobile: sidebar nằm ngang phía trên nên thu gọn = ẩn nav, giữ lại brand. */
+  .app-shell.sidebar-collapsed .sidebar { transform: none; visibility: visible; }
+  .app-shell.sidebar-collapsed .sidebar .main-nav,
+  .app-shell.sidebar-collapsed .sidebar .sidebar-bottom { display: none; }
+  .sidebar-collapse-btn { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .workspace { transition: none; }
+}

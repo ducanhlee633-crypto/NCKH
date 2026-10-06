@@ -11,7 +11,7 @@ function NavLink({ item, active, onNavigate }) {
   </a>
 }
 
-export default function Sidebar({ currentPage, onNavigate }) {
+export default function Sidebar({ currentPage, onNavigate, collapsed, onToggleSidebar }) {
   const [profile] = useStoredState('nhip-hoc-settings', defaultSettings)
   const [accountName, setAccountName] = useState(() => displayUser(getSession())?.name || '')
   // Lớp ưu tiên từ profile server khi đã đăng nhập, fallback settings local.
@@ -20,12 +20,23 @@ export default function Sidebar({ currentPage, onNavigate }) {
     setAccountName(displayUser(session)?.name || '')
     setServerGrade(session?.profile?.grade || '')
   }), [])
-  return <aside className="sidebar">
+  return <aside className="sidebar" id="main-sidebar">
     <div>
       <a className="brand" href="#dashboard" aria-label="Nhịp Học — Góc học tập">
         <div className="brand-mark"><Icon name="book" size={27} /></div>
         <div><div className="brand-name">Nhịp Học<span>·</span></div><div className="brand-caption">Một chút mỗi ngày</div></div>
       </a>
+      {onToggleSidebar && <button
+        type="button"
+        className="sidebar-collapse-btn"
+        onClick={onToggleSidebar}
+        aria-expanded={!collapsed}
+        aria-controls="main-sidebar"
+        title={collapsed ? 'Mở sidebar (Ctrl+B)' : 'Thu gọn sidebar để đọc rộng hơn (Ctrl+B)'}
+        aria-label={collapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
+      >
+        <Icon name={collapsed ? 'sidebar-expand' : 'sidebar-collapse'} size={19} />
+      </button>}
       <nav className="main-nav" aria-label="Điều hướng chính">
         <p className="nav-group-label">Không gian của bạn</p>
         {navigationItems.map(item => <NavLink key={item.path} item={item} active={currentPage === item.path || (item.path === 'goals' && currentPage === 'goal')} onNavigate={onNavigate} />)}

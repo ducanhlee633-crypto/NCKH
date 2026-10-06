@@ -15,6 +15,8 @@ const paths = {
   plus: 'M12 5v14 M5 12h14',
   weekly: 'M4 6h16 M4 12h10 M4 18h7 M15 14l6 6 M21 14l-6 6',
   'weekly-tasks': 'M4 6h16 M4 12h10 M4 18h7 M15 14l6 6 M21 14l-6 6',
+  'sidebar-collapse': 'M4 5h16v14H4z M9 5v14 M13 10l-2 2 2 2',
+  'sidebar-expand': 'M4 5h16v14H4z M9 5v14 M11 10l2 2-2 2',
 }
 
 export default function Icon({ name, size = 20 }) {

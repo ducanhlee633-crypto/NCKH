@@ -35,7 +35,7 @@ function FocusTimerBadge({ onNavigate }) {
   )
 }
 
-export default function Topbar({ currentPage, onNavigate, user, onLogout }) {
+export default function Topbar({ currentPage, onNavigate, user, onLogout, sidebarCollapsed, onToggleSidebar }) {
   const [profile] = useStoredState('nhip-hoc-settings', defaultSettings)
   // Lớp ưu tiên từ profile server khi đã đăng nhập, fallback settings local.
   const [serverGrade, setServerGrade] = useState(() => getSession()?.profile?.grade || '')
@@ -43,7 +43,20 @@ export default function Topbar({ currentPage, onNavigate, user, onLogout }) {
   const shownGrade = serverGrade || profile.grade
   const page = [...navigationItems, ...utilityItems].find(item => item.path === currentPage)
   return <header className="study-header">
-    <div className="study-breadcrumb"><Icon name={currentPage} size={18} /><span>Không gian học tập</span><span aria-hidden="true">/</span><b>{page?.label || 'Mục tiêu'}</b></div>
+    <div className="study-header-left">
+      {onToggleSidebar && <button
+        type="button"
+        className="sidebar-toggle"
+        onClick={onToggleSidebar}
+        aria-expanded={!sidebarCollapsed}
+        aria-controls="main-sidebar"
+        title={sidebarCollapsed ? 'Mở sidebar (Ctrl+B)' : 'Thu gọn sidebar để đọc rộng hơn (Ctrl+B)'}
+        aria-label={sidebarCollapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
+      >
+        <Icon name={sidebarCollapsed ? 'sidebar-expand' : 'sidebar-collapse'} size={20} />
+      </button>}
+      <div className="study-breadcrumb"><Icon name={currentPage} size={18} /><span>Không gian học tập</span><span aria-hidden="true">/</span><b>{page?.label || 'Mục tiêu'}</b></div>
+    </div>
     {currentPage !== 'pomodoro' && <FocusTimerBadge onNavigate={onNavigate} />}
     <div className="auth-account"><span>{user?.name}</span><button className="ghost-button" onClick={onLogout}>Đăng xuất</button>
     <button className="student-profile-chip" onClick={() => onNavigate('settings')}><Icon name="book" size={17} />{shownGrade ? gradeLabel(shownGrade) : 'Chọn lớp của bạn'}</button></div>
