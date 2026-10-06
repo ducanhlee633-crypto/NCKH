@@ -1,0 +1,99 @@
+/* Weekly tasks — Kanban T2-CN, UI trước (localStorage) */
+.summary-grid.weekly-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 16px}
+.summary-chip{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border-radius:18px;background:#fff;border:2px solid var(--line,#e3ebfb)}
+.summary-chip span{font-size:10px;font-weight:900;letter-spacing:.6px;color:#7b879b}
+.summary-chip b{font:800 20px 'Baloo 2',system-ui;color:var(--ink,#1d2b45)}
+.summary-chip.blue{border-color:#c9ddff;background:linear-gradient(180deg,#f2f7ff,#e9f1ff)}
+.summary-chip.mint{border-color:#bfe9d6;background:linear-gradient(180deg,#f0fdf7,#e3f8ee)}
+.summary-chip.gold{border-color:#f3d68a;background:linear-gradient(180deg,#fff8e2,#fff0c2)}
+
+.weekly-toolbar-card{padding:16px 18px;margin-bottom:16px}
+.weekly-toolbar{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.weekly-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.weekly-search,.weekly-filters select{padding:10px 12px;border:2px solid #dfe7f7;border-radius:12px;font:inherit;font-size:13px;font-weight:700;color:var(--ink);background:#fff}
+.weekly-search{min-width:200px}
+.weekly-progress{height:10px;margin-top:12px;overflow:hidden;background:#e8eefb;border-radius:20px}
+.weekly-progress i{display:block;height:100%;background:linear-gradient(90deg,#4d8dff,#7ab8ff);border-radius:inherit;transition:width .3s}
+
+.weekly-board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+.weekly-column{display:flex;flex-direction:column;gap:10px;min-height:320px;padding:14px;border-radius:22px;border:1px solid var(--line,#dfe7f7);transition:border-color .15s,background .15s,box-shadow .15s}
+.weekly-column-todo{background:linear-gradient(180deg,#e8f0ff 0%,#f3f7ff 55%,#f7faff 100%);border-color:#bfd4f8}
+.weekly-column-doing{background:linear-gradient(180deg,#fff1cf 0%,#fff7e3 55%,#fffdf3 100%);border-color:#eed28a}
+.weekly-column-done{background:linear-gradient(180deg,#d7f3e3 0%,#e8f9ef 55%,#f2fbf6 100%);border-color:#a9dfc2}
+.weekly-column.is-dragover{border-color:#4d8dff;border-style:dashed;box-shadow:0 0 0 3px rgba(77,141,255,.18)}
+.weekly-column-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:2px 2px 0}
+.weekly-column-head b{display:block;font:800 16px 'Baloo 2',system-ui;color:var(--ink,#1d2b45)}
+.weekly-column-head small{display:block;margin-top:2px;color:#66748e;font-size:11px;font-weight:700}
+.weekly-count{min-width:32px;height:32px;display:grid;place-items:center;padding:0 10px;background:#fff;border-radius:12px;font-weight:900;font-size:13px;color:#3d4a61;box-shadow:0 2px 6px rgba(38,89,177,.08)}
+.weekly-column-todo .weekly-count{background:#2f6fed;color:#fff}
+.weekly-column-doing .weekly-count{background:#b97e0c;color:#fff}
+.weekly-column-done .weekly-count{background:#0b7a4e;color:#fff}
+.weekly-column-body{display:flex;flex-direction:column;gap:10px;min-height:180px}
+.weekly-empty{padding:16px 12px;text-align:center;color:#6d7a93;font-size:12px;font-weight:700;background:rgba(255,255,255,.75);border:2px dashed rgba(90,110,150,.3);border-radius:14px}
+
+.weekly-card{position:relative;overflow:hidden;padding:13px 13px 11px 17px;background:#fff;border:1px solid #e0e7f5;border-radius:16px;box-shadow:0 6px 18px rgba(38,89,177,.09);cursor:grab;transition:transform .12s,box-shadow .12s}
+.weekly-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(38,89,177,.14)}
+.weekly-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--stripe,#4d8dff)}
+.weekly-card:active{cursor:grabbing}
+.weekly-card.is-dragging{opacity:.6;transform:scale(.98) rotate(.4deg)}
+/* Màu nền theo ưu tiên — hết trắng bệt */
+.weekly-card.priority-high{--stripe:#e5534b;background:linear-gradient(135deg,#fff 0%,#ffe9e5 62%,#ffd9d2 100%);border-color:#f0a9a1}
+.weekly-card.priority-medium{--stripe:#2f6fed;background:linear-gradient(135deg,#fff 0%,#e3efff 62%,#d3e4ff 100%);border-color:#a9c6f7}
+.weekly-card.priority-low{--stripe:#7c8aa5;background:linear-gradient(135deg,#fff 0%,#eef1f6 60%,#e2e8f2 100%);border-color:#c4cfdf}
+/* Cột xong: phủ xanh nhẹ, tiêu đề mờ đi */
+.weekly-column-done .weekly-card{background:linear-gradient(135deg,#fff 0%,#ddf5e7 70%,#c9eedb 100%);border-color:#93d4b1}
+.weekly-column-done .weekly-card h3{color:#0b5c3f}
+.weekly-card.is-overdue{border-color:#e5534b;box-shadow:0 6px 18px rgba(229,83,75,.18)}
+.weekly-card h3{margin:8px 0 4px;font:800 14px/1.4 'Nunito',system-ui;color:var(--ink,#1d2b45)}
+.weekly-card-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.priority-pill{padding:4px 10px;border-radius:20px;font-size:10px;font-weight:900;letter-spacing:.4px;border:1px solid transparent}
+.priority-pill.priority-high{color:#fff;background:#d33f36;box-shadow:0 2px 6px rgba(211,63,54,.35)}
+.priority-pill.priority-medium{color:#fff;background:#2f6fed;box-shadow:0 2px 6px rgba(47,111,237,.35)}
+.priority-pill.priority-low{color:#3d4a61;background:rgba(255,255,255,.85);border-color:#b9c4d8}
+.weekly-subject{padding:4px 10px;background:rgba(255,255,255,.88);border:1px solid rgba(61,74,97,.16);border-radius:20px;font-size:11px;font-weight:800;color:#33415c}
+.weekly-desc{margin:0 0 8px;color:#46536d;font-size:12.5px;line-height:1.55;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.weekly-column-done .weekly-desc{color:#2c5a46}
+.weekly-meta{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 10px}
+.weekly-date{font-size:11px;font-weight:800;color:#33415c;background:rgba(255,255,255,.9);border:1px solid rgba(61,74,97,.14);padding:5px 10px;border-radius:12px}
+.weekly-date.today{color:#fff;background:#0b7a4e;border-color:#0b7a4e}
+.weekly-date.overdue{color:#fff;background:#d33f36;border-color:#d33f36}
+.weekly-card-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid rgba(61,74,97,.14);padding-top:9px}
+.weekly-stepper{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#33415c}
+.weekly-stepper button{width:26px;height:26px;display:grid;place-items:center;border:1px solid rgba(61,74,97,.22);background:#fff;border-radius:9px;cursor:pointer;font-weight:900;box-shadow:0 1px 4px rgba(38,89,177,.1)}
+.weekly-stepper button:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
+.weekly-icon-actions{display:flex;align-items:center;gap:8px}
+.link-button{background:none;border:0;color:#1f4fd6;font-size:12px;font-weight:800;cursor:pointer;padding:4px 2px}
+.weekly-delete{width:26px;height:26px;display:grid;place-items:center;border:0;border-radius:9px;background:rgba(179,67,48,.14);color:#b34330;font-size:16px;cursor:pointer}
+.weekly-delete:hover{background:#b34330;color:#fff}
+.weekly-add{margin-top:2px;padding:11px;border:2px dashed rgba(70,90,130,.35);background:rgba(255,255,255,.6);border-radius:13px;color:#33415c;font-size:12px;font-weight:800;cursor:pointer}
+.weekly-add:hover{background:#fff;border-color:#2f6fed;color:#1f4fd6}
+.weekly-hint{margin-top:14px}
+.composer-times{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.app-modal select{display:block;width:100%;margin-top:6px;padding:11px;border:1px solid #ccd8e8;border-radius:10px;font:inherit}
+.app-modal textarea{box-sizing:border-box}
+
+/* Dark mode: giữ màu cột nhưng trầm xuống, card vẫn nổi */
+html[data-theme="dark"] .weekly-column{background:var(--card);border-color:var(--line)}
+html[data-theme="dark"] .weekly-column-todo{border-top:5px solid #4d8dff}
+html[data-theme="dark"] .weekly-column-doing{border-top:5px solid #f5b942}
+html[data-theme="dark"] .weekly-column-done{border-top:5px solid #3ecf8e}
+html[data-theme="dark"] .weekly-card{box-shadow:none}
+html[data-theme="dark"] .weekly-card.priority-high{background:linear-gradient(135deg,#3a2326,#4d2c2e);border-color:#7a3b44;color:var(--ink)}
+html[data-theme="dark"] .weekly-card.priority-medium{background:linear-gradient(135deg,#1e2c4e,#263b66);border-color:#3d5a94;color:var(--ink)}
+html[data-theme="dark"] .weekly-card.priority-low{background:#263449;border-color:var(--line);color:var(--ink)}
+html[data-theme="dark"] .weekly-column-done .weekly-card{background:linear-gradient(135deg,#17352a,#1f4636);border-color:#2a5a4f}
+html[data-theme="dark"] .weekly-card h3,html[data-theme="dark"] .weekly-desc,html[data-theme="dark"] .weekly-stepper{color:var(--ink)}
+html[data-theme="dark"] .weekly-subject,html[data-theme="dark"] .weekly-date,html[data-theme="dark"] .weekly-stepper button{background:#182232;border-color:#53647b;color:var(--ink)}
+html[data-theme="dark"] .weekly-empty,html[data-theme="dark"] .weekly-add{background:#263449;border-color:var(--line);color:var(--ink)}
+
+@media(max-width:1020px){
+  .weekly-board{grid-template-columns:minmax(0,1fr)}
+  .weekly-column{min-height:0}
+  .summary-grid.weekly-stats{grid-template-columns:1fr 1fr}
+  .weekly-search{min-width:140px;flex:1}
+}
+@media(max-width:640px){
+  .summary-grid.weekly-stats{grid-template-columns:1fr}
+  .composer-times{grid-template-columns:1fr}
+  .weekly-toolbar{align-items:stretch;flex-direction:column}
+}

@@ -1,6 +1,7 @@
 export const navigationItems = [
   { label: 'Góc học tập', path: 'dashboard' },
   { label: 'Lịch học', path: 'schedule' },
+  { label: 'Việc trong tuần', path: 'weekly-tasks' },
   { label: 'Trợ lý học tập', path: 'assistant' },
   { label: 'Phòng tập trung', path: 'pomodoro' },
   { label: 'Lộ trình học', path: 'roadmap' },

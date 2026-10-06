@@ -9,12 +9,14 @@ import './styles/roadmap.css'
 import './styles/stats.css'
 import './styles/ai-assistant.css'
 import './styles/pomodoro.css'
+import './styles/weekly-tasks.css'
 import './styles/settings.css'
 import './styles/community.css'
 import './styles/responsive.css'
 import { navigationItems, utilityItems } from './data/navigation'
 import DashboardPage from './pages/DashboardPage'
 import SchedulePage from './pages/SchedulePage'
+import WeeklyTasksPage from './pages/WeeklyTasksPage'
 import AIAssistantPage from './pages/AIAssistantPage'
 import PomodoroPage from './pages/PomodoroPage'
 import RoadmapPage from './pages/RoadmapPage'
@@ -32,6 +34,8 @@ import { applySettings, loadSettings, persistSettings } from './data/settings'
 const pageMap = {
   dashboard: DashboardPage,
   schedule: SchedulePage,
+  'weekly-tasks': WeeklyTasksPage,
+  weekly: WeeklyTasksPage,
   assistant: AIAssistantPage,
   pomodoro: PomodoroPage,
   roadmap: RoadmapPage,

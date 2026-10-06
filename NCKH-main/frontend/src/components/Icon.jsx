@@ -13,6 +13,8 @@ const paths = {
   check: 'm5 12 4 4L19 6',
   arrow: 'M4 12h16 M14 6l6 6-6 6',
   plus: 'M12 5v14 M5 12h14',
+  weekly: 'M4 6h16 M4 12h10 M4 18h7 M15 14l6 6 M21 14l-6 6',
+  'weekly-tasks': 'M4 6h16 M4 12h10 M4 18h7 M15 14l6 6 M21 14l-6 6',
 }
 
 export default function Icon({ name, size = 20 }) {
