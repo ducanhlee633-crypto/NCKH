@@ -33,6 +33,11 @@ app.include_router(api_router, prefix="/api")
 
 
 
+@app.get("/")
+def root():
+    return {"message": "Nhip Hoc API running", "docs": "/docs", "health": "/api/health"}
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
