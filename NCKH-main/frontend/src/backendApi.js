@@ -1247,7 +1247,7 @@ export function aiMessagesToPayload(list = []) {
 }
 
 /** Gửi hội thoại lên backend, trả về chuỗi reply. Ném lỗi có friendlyMessage. */
-export async function sendAiChat(messages, { aiTone } = {}) {
+export async function sendAiChat(messages, { aiTone, tags, sessionId } = {}) {
   const payload = aiMessagesToPayload(messages)
   if (!payload.length) throw { friendlyMessage: 'Hãy nhập câu hỏi trước khi gửi.' }
   // Ưu tiên aiTone truyền vào (bản Settings mới chỉnh nhưng chưa bấm Lưu);
@@ -1260,8 +1260,16 @@ export async function sendAiChat(messages, { aiTone } = {}) {
       if (['cute', 'honest', 'funny', 'empathetic'].includes(raw)) tone = raw
     } catch { /* bỏ qua: backend tự đọc DB */ }
   }
+  // Hint tag trí nhớ dài hạn để backend lọc bằng index (user_id, tag) cho nhanh.
+  // Thiếu thì backend tự suy từ câu hỏi rồi fallback đọc mới nhất.
+  const cleanTags = (Array.isArray(tags) ? tags : []).filter((t) => MEMORY_TAG_VALUES.includes(String(t))).slice(0, 6)
   try {
-    const { data } = await api.post('/api/ai/chat', { messages: payload, ...(tone ? { aiTone: tone } : {}) }, { timeout: 60000 })
+    const { data } = await api.post('/api/ai/chat', {
+      messages: payload,
+      ...(tone ? { aiTone: tone } : {}),
+      ...(cleanTags.length ? { tags: cleanTags } : {}),
+      ...(sessionId ? { sessionId: String(sessionId) } : {}),
+    }, { timeout: 60000 })
     const reply = String(data?.reply ?? '').trim()
     if (!reply) throw { response: { data: {} }, message: 'empty reply' }
     return reply
@@ -1372,6 +1380,70 @@ export async function createAiMessage(sessionId, { role, content } = {}) {
     return data
   } catch (failure) {
     throw { ...failure, friendlyMessage: aiHistoryErrorMessage(failure, 'Không lưu được tin nhắn lên server.') }
+  }
+}
+
+/** Trí nhớ dài hạn cho AI (ai_memories): user tự quản trong Settings "Quản lí trí nhớ AI".
+ *  Backend POST /api/ai/chat tự ĐỌC TRƯỚC bảng này mỗi lượt (ưu tiên lọc theo tag). */
+
+const MEMORY_TAG_VALUES = ['info', 'hobby', 'study', 'goal', 'habit', 'note']
+const normalizeMemoryTag = value => (MEMORY_TAG_VALUES.includes(String(value)) ? String(value) : 'note')
+
+function memoryErrorMessage(failure, fallback) {
+  const detail = failure.response?.data?.detail
+  if (detail) return typeof detail === 'string' ? detail : 'Thông tin trí nhớ chưa hợp lệ.'
+  if (failure.response?.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
+  return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
+}
+
+/** GET /api/ai/memory?tag=&q=&limit=&offset= — trí nhớ của mình (mới nhất trước). */
+export async function fetchAiMemories({ tag, q, limit = 50, offset = 0 } = {}) {
+  const params = new URLSearchParams()
+  if (tag && MEMORY_TAG_VALUES.includes(tag)) params.set('tag', tag)
+  if (q) params.set('q', String(q).slice(0, 200))
+  if (limit) params.set('limit', Math.max(1, Math.min(50, Number(limit) || 50)))
+  if (offset) params.set('offset', Math.max(0, Number(offset) || 0))
+  const query = params.toString()
+  try {
+    const { data } = await api.get('/api/ai/memory' + (query ? `?${query}` : ''))
+    return Array.isArray(data) ? data : []
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: memoryErrorMessage(failure, 'Không tải được trí nhớ AI.') }
+  }
+}
+
+/** POST /api/ai/memory {tag, content} — thêm 1 mẩu (tối đa 50 dòng/user). */
+export async function createAiMemory({ tag, content } = {}) {
+  const clean = String(content ?? '').trim().slice(0, 500)
+  if (!clean) throw { friendlyMessage: 'Nhập nội dung trí nhớ trước khi lưu.' }
+  try {
+    const { data } = await api.post('/api/ai/memory', { tag: normalizeMemoryTag(tag), content: clean })
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: memoryErrorMessage(failure, 'Không lưu được trí nhớ lên server. Vui lòng thử lại.') }
+  }
+}
+
+/** PUT /api/ai/memory/{id} — sửa tag/content. */
+export async function updateAiMemory(id, { tag, content } = {}) {
+  const payload = {}
+  if (tag !== undefined) payload.tag = normalizeMemoryTag(tag)
+  if (content !== undefined) payload.content = String(content ?? '').trim().slice(0, 500)
+  try {
+    const { data } = await api.put(`/api/ai/memory/${encodeURIComponent(String(id || ''))}`, payload)
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: memoryErrorMessage(failure, 'Không sửa được trí nhớ trên server.') }
+  }
+}
+
+/** DELETE /api/ai/memory/{id} — xóa 1 mẩu (204). */
+export async function deleteAiMemory(id) {
+  try {
+    await api.delete(`/api/ai/memory/${encodeURIComponent(String(id || ''))}`)
+    return null
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: memoryErrorMessage(failure, 'Không xóa được trí nhớ.') }
   }
 }
 

@@ -15,6 +15,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from schema import AiMessage, AiMessageCreate, AiMessageUpdate, AiSession, AiSessionCreate, AiSessionUpdate
 from supabase_client import get_supabase_admin
@@ -47,17 +48,19 @@ def _to_message(row: dict) -> AiMessage:
     return AiMessage.model_validate(row)
 
 
-def _fetch_session(session_id: UUID, user_id: UUID) -> dict:
+async def _fetch_session(session_id: UUID, user_id: UUID) -> dict:
     """Lấy session của chính mình, 404 nếu không thuộc về user."""
     try:
-        result = (
-            get_supabase_admin()
-            .table(SESSION_TABLE)
-            .select(SESSION_COLUMNS)
-            .eq("id", str(session_id))
-            .eq("user_id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(SESSION_TABLE)
+                .select(SESSION_COLUMNS)
+                .eq("id", str(session_id))
+                .eq("user_id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -66,18 +69,20 @@ def _fetch_session(session_id: UUID, user_id: UUID) -> dict:
     return result.data[0]
 
 
-def _fetch_message(message_id: UUID, session_id: UUID, user_id: UUID) -> dict:
+async def _fetch_message(message_id: UUID, session_id: UUID, user_id: UUID) -> dict:
     """Lấy message thuộc đúng session của chính mình."""
     try:
-        result = (
-            get_supabase_admin()
-            .table(MESSAGE_TABLE)
-            .select(MESSAGE_COLUMNS)
-            .eq("id", str(message_id))
-            .eq("session_id", str(session_id))
-            .eq("user_id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(MESSAGE_TABLE)
+                .select(MESSAGE_COLUMNS)
+                .eq("id", str(message_id))
+                .eq("session_id", str(session_id))
+                .eq("user_id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -86,13 +91,17 @@ def _fetch_message(message_id: UUID, session_id: UUID, user_id: UUID) -> dict:
     return result.data[0]
 
 
-def _touch_session(session_id: UUID, user_id: UUID) -> None:
+async def _touch_session(session_id: UUID, user_id: UUID) -> None:
     """Chạm updated_at của session sau khi messages thay đổi (để sort 'gần đây nhất')."""
     try:
-        row = _fetch_session(session_id, user_id)
-        get_supabase_admin().table(SESSION_TABLE).update({"title": row["title"]}).eq(
-            "id", str(session_id)
-        ).eq("user_id", str(user_id)).execute()
+        row = await _fetch_session(session_id, user_id)
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(SESSION_TABLE).update({"title": row["title"]}).eq(
+                    "id", str(session_id)
+                ).eq("user_id", str(user_id)).execute()
+            )
+        )
     except HTTPException:
         raise
     except Exception as error:
@@ -103,17 +112,19 @@ def _touch_session(session_id: UUID, user_id: UUID) -> None:
 
 
 @router.get("", response_model=list[AiSession])
-def list_ai_sessions(
+async def list_ai_sessions(
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> list[AiSession]:
     """Liệt kê session của chính mình (mới cập nhật trước)."""
     try:
-        result = (
-            get_supabase_admin()
-            .table(SESSION_TABLE)
-            .select(SESSION_COLUMNS)
-            .eq("user_id", str(current.id))
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(SESSION_TABLE)
+                .select(SESSION_COLUMNS)
+                .eq("user_id", str(current.id))
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -123,7 +134,7 @@ def list_ai_sessions(
 
 
 @router.post("", response_model=AiSession, status_code=status.HTTP_201_CREATED)
-def create_ai_session(
+async def create_ai_session(
     payload: AiSessionCreate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> AiSession:
@@ -135,12 +146,14 @@ def create_ai_session(
             detail="Tiêu đề đoạn chat không được để trống.",
         )
     try:
-        result = (
-            get_supabase_admin()
-            .table(SESSION_TABLE)
-            .insert({"user_id": str(current.id), "title": title})
-            .select(SESSION_COLUMNS)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(SESSION_TABLE)
+                .insert({"user_id": str(current.id), "title": title})
+                .select(SESSION_COLUMNS)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -150,16 +163,16 @@ def create_ai_session(
 
 
 @router.get("/{session_id}", response_model=AiSession)
-def read_ai_session(
+async def read_ai_session(
     session_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> AiSession:
     """Đọc 1 session của chính mình."""
-    return _to_session(_fetch_session(session_id, current.id))
+    return _to_session(await _fetch_session(session_id, current.id))
 
 
-def _apply_session_update(session_id: UUID, payload: AiSessionUpdate, user_id: UUID) -> AiSession:
-    row = _fetch_session(session_id, user_id)
+async def _apply_session_update(session_id: UUID, payload: AiSessionUpdate, user_id: UUID) -> AiSession:
+    row = await _fetch_session(session_id, user_id)
     current = _to_session(row)
     values = payload.model_dump(exclude_unset=True, mode="json")
     # Chuẩn hóa title: strip, bỏ qua nếu rỗng (pydantic đã chặn rỗng, đây là phòng thủ).
@@ -173,14 +186,16 @@ def _apply_session_update(session_id: UUID, payload: AiSessionUpdate, user_id: U
     if not values:
         return current
     try:
-        result = (
-            get_supabase_admin()
-            .table(SESSION_TABLE)
-            .update(values)
-            .eq("id", str(session_id))
-            .eq("user_id", str(user_id))
-            .select(SESSION_COLUMNS)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(SESSION_TABLE)
+                .update(values)
+                .eq("id", str(session_id))
+                .eq("user_id", str(user_id))
+                .select(SESSION_COLUMNS)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -190,40 +205,48 @@ def _apply_session_update(session_id: UUID, payload: AiSessionUpdate, user_id: U
 
 
 @router.put("/{session_id}", response_model=AiSession)
-def update_ai_session(
+async def update_ai_session(
     session_id: UUID,
     payload: AiSessionUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> AiSession:
     """Sửa title session (chỉ field được gửi mới đổi)."""
-    return _apply_session_update(session_id, payload, current.id)
+    return await _apply_session_update(session_id, payload, current.id)
 
 
 @router.patch("/{session_id}", response_model=AiSession)
-def patch_ai_session(
+async def patch_ai_session(
     session_id: UUID,
     payload: AiSessionUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> AiSession:
     """Alias của PUT cho client thích PATCH từng field."""
-    return _apply_session_update(session_id, payload, current.id)
+    return await _apply_session_update(session_id, payload, current.id)
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_ai_session(
+async def delete_ai_session(
     session_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Response:
     """Xóa session + toàn bộ messages (DB CASCADE, code xóa messages trước cho chắc)."""
-    _fetch_session(session_id, current.id)
+    await _fetch_session(session_id, current.id)
     try:
         # Xóa messages trước để chắc chắn sạch ngay cả khi DB chưa có CASCADE.
-        get_supabase_admin().table(MESSAGE_TABLE).delete().eq(
-            "session_id", str(session_id)
-        ).eq("user_id", str(current.id)).execute()
-        get_supabase_admin().table(SESSION_TABLE).delete().eq("id", str(session_id)).eq(
-            "user_id", str(current.id)
-        ).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(MESSAGE_TABLE).delete().eq(
+                    "session_id", str(session_id)
+                ).eq("user_id", str(current.id)).execute()
+            )
+        )
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(SESSION_TABLE).delete().eq("id", str(session_id)).eq(
+                    "user_id", str(current.id)
+                ).execute()
+            )
+        )
     except Exception as error:
         _db_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -233,22 +256,24 @@ def delete_ai_session(
 
 
 @router.get("/{session_id}/messages", response_model=list[AiMessage])
-def list_ai_messages(
+async def list_ai_messages(
     session_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
     limit: int = Query(default=DEFAULT_MESSAGE_LIMIT, ge=1, le=MAX_MESSAGE_LIMIT),
     offset: int = Query(default=0, ge=0),
 ) -> list[AiMessage]:
     """Đọc messages của 1 session theo thứ tự thời gian ASC (đủ dựng context RAG)."""
-    _fetch_session(session_id, current.id)
+    await _fetch_session(session_id, current.id)
     try:
-        result = (
-            get_supabase_admin()
-            .table(MESSAGE_TABLE)
-            .select(MESSAGE_COLUMNS)
-            .eq("session_id", str(session_id))
-            .eq("user_id", str(current.id))
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(MESSAGE_TABLE)
+                .select(MESSAGE_COLUMNS)
+                .eq("session_id", str(session_id))
+                .eq("user_id", str(current.id))
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -258,13 +283,13 @@ def list_ai_messages(
 
 
 @router.post("/{session_id}/messages", response_model=AiMessage, status_code=status.HTTP_201_CREATED)
-def create_ai_message(
+async def create_ai_message(
     session_id: UUID,
     payload: AiMessageCreate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> AiMessage:
     """Lưu 1 message (role = user | assistant) vào session của mình."""
-    _fetch_session(session_id, current.id)
+    await _fetch_session(session_id, current.id)
     content = payload.content.strip()
     if not content:
         raise HTTPException(
@@ -272,32 +297,34 @@ def create_ai_message(
             detail="Nội dung tin nhắn không được để trống.",
         )
     try:
-        result = (
-            get_supabase_admin()
-            .table(MESSAGE_TABLE)
-            .insert(
-                {
-                    "session_id": str(session_id),
-                    "user_id": str(current.id),
-                    "role": payload.role,
-                    "content": content,
-                }
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(MESSAGE_TABLE)
+                .insert(
+                    {
+                        "session_id": str(session_id),
+                        "user_id": str(current.id),
+                        "role": payload.role,
+                        "content": content,
+                    }
+                )
+                .select(MESSAGE_COLUMNS)
+                .execute()
             )
-            .select(MESSAGE_COLUMNS)
-            .execute()
         )
     except Exception as error:
         _db_error(error)
     if not result.data:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database operation failed")
-    _touch_session(session_id, current.id)
+    await _touch_session(session_id, current.id)
     return _to_message(result.data[0])
 
 
-def _apply_message_update(
+async def _apply_message_update(
     session_id: UUID, message_id: UUID, payload: AiMessageUpdate, user_id: UUID
 ) -> AiMessage:
-    row = _fetch_message(message_id, session_id, user_id)
+    row = await _fetch_message(message_id, session_id, user_id)
     current = _to_message(row)
     values = payload.model_dump(exclude_unset=True, mode="json")
     if "content" in values and values["content"] is not None:
@@ -310,59 +337,65 @@ def _apply_message_update(
     if not values:
         return current
     try:
-        result = (
-            get_supabase_admin()
-            .table(MESSAGE_TABLE)
-            .update(values)
-            .eq("id", str(message_id))
-            .eq("session_id", str(session_id))
-            .eq("user_id", str(user_id))
-            .select(MESSAGE_COLUMNS)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(MESSAGE_TABLE)
+                .update(values)
+                .eq("id", str(message_id))
+                .eq("session_id", str(session_id))
+                .eq("user_id", str(user_id))
+                .select(MESSAGE_COLUMNS)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
     if not result.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI message not found")
-    _touch_session(session_id, user_id)
+    await _touch_session(session_id, user_id)
     return _to_message(result.data[0])
 
 
 @router.put("/{session_id}/messages/{message_id}", response_model=AiMessage)
-def update_ai_message(
+async def update_ai_message(
     session_id: UUID,
     message_id: UUID,
     payload: AiMessageUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> AiMessage:
     """Sửa content message (giữ role bất biến)."""
-    return _apply_message_update(session_id, message_id, payload, current.id)
+    return await _apply_message_update(session_id, message_id, payload, current.id)
 
 
 @router.patch("/{session_id}/messages/{message_id}", response_model=AiMessage)
-def patch_ai_message(
+async def patch_ai_message(
     session_id: UUID,
     message_id: UUID,
     payload: AiMessageUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> AiMessage:
     """Alias của PUT message."""
-    return _apply_message_update(session_id, message_id, payload, current.id)
+    return await _apply_message_update(session_id, message_id, payload, current.id)
 
 
 @router.delete("/{session_id}/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_ai_message(
+async def delete_ai_message(
     session_id: UUID,
     message_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Response:
     """Xóa 1 message trong session của mình (204)."""
-    _fetch_message(message_id, session_id, current.id)
+    await _fetch_message(message_id, session_id, current.id)
     try:
-        get_supabase_admin().table(MESSAGE_TABLE).delete().eq("id", str(message_id)).eq(
-            "session_id", str(session_id)
-        ).eq("user_id", str(current.id)).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(MESSAGE_TABLE).delete().eq("id", str(message_id)).eq(
+                    "session_id", str(session_id)
+                ).eq("user_id", str(current.id)).execute()
+            )
+        )
     except Exception as error:
         _db_error(error)
-    _touch_session(session_id, current.id)
+    await _touch_session(session_id, current.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

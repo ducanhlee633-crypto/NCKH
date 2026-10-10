@@ -9,6 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from schema import (
     POMODORO_SUBJECT_VALUES,
@@ -80,16 +81,18 @@ def _validate_payload(payload: PomodoroSessionCreate) -> dict:
     }
 
 
-def _fetch_one(session_id: UUID, user_id: UUID) -> dict:
+async def _fetch_one(session_id: UUID, user_id: UUID) -> dict:
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("id", str(session_id))
-            .eq("user_id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("id", str(session_id))
+                .eq("user_id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -107,7 +110,7 @@ def _session_day(row: dict) -> va_date:
 
 
 @router.get("", response_model=list[PomodoroSession])
-def list_sessions(
+async def list_sessions(
     current: SupabaseUser = Depends(get_current_supabase_user),
     from_day: va_date | None = Query(default=None, alias="from"),
     to_day: va_date | None = Query(default=None, alias="to"),
@@ -119,12 +122,14 @@ def list_sessions(
             detail="Ngày 'from' phải trước hoặc bằng ngày 'to'.",
         )
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("user_id", str(current.id))
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("user_id", str(current.id))
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -141,7 +146,7 @@ def list_sessions(
 
 
 @router.get("/summary", response_model=PomodoroSummary)
-def session_summary(
+async def session_summary(
     current: SupabaseUser = Depends(get_current_supabase_user),
     from_day: va_date | None = Query(default=None, alias="from"),
     to_day: va_date | None = Query(default=None, alias="to"),
@@ -155,7 +160,7 @@ def session_summary(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Ngày 'from' phải trước hoặc bằng ngày 'to'.",
         )
-    sessions = list_sessions(current, start, end)
+    sessions = await list_sessions(current, start, end)
     by_day: dict[va_date, dict[str, int]] = {}
     for session in sessions:
         day = _session_day({"started_at": session.started_at.isoformat()})
@@ -177,7 +182,7 @@ def session_summary(
 
 
 @router.post("", response_model=PomodoroSession, status_code=status.HTTP_201_CREATED)
-def create_session(
+async def create_session(
     payload: PomodoroSessionCreate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> PomodoroSession:
@@ -185,8 +190,10 @@ def create_session(
     values = _validate_payload(payload)
     values["user_id"] = str(current.id)
     try:
-        result = (
-            get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -196,25 +203,29 @@ def create_session(
 
 
 @router.get("/{session_id}", response_model=PomodoroSession)
-def read_session(
+async def read_session(
     session_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> PomodoroSession:
     """Đọc 1 phiên của chính mình."""
-    return _to_session(_fetch_one(session_id, current.id))
+    return _to_session(await _fetch_one(session_id, current.id))
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_session(
+async def delete_session(
     session_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Response:
     """Xóa 1 phiên của chính mình (204)."""
-    _fetch_one(session_id, current.id)
+    await _fetch_one(session_id, current.id)
     try:
-        get_supabase_admin().table(TABLE).delete().eq("id", str(session_id)).eq(
-            "user_id", str(current.id)
-        ).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).delete().eq("id", str(session_id)).eq(
+                    "user_id", str(current.id)
+                ).execute()
+            )
+        )
     except Exception as error:
         _db_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

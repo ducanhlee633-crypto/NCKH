@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     )
     openrouter_site_url: str | None = Field(default=None, validation_alias="OPENROUTER_SITE_URL")
     openrouter_app_name: str | None = Field(default=None, validation_alias="OPENROUTER_APP_NAME")
+    # Web Push (VAPID). Public key lộ cho frontend subscribe, private key chỉ ở backend.
+    vapid_public_key: str | None = Field(default=None, validation_alias="VAPID_PUBLIC_KEY")
+    vapid_private_key: str | None = Field(default=None, validation_alias="VAPID_PRIVATE_KEY")
+    vapid_subject: str = Field(default="mailto:admin@example.com", validation_alias="VAPID_SUBJECT")
 
     model_config = SettingsConfigDict(env_file=Path(__file__).resolve().parent / ".env", extra="ignore")
 

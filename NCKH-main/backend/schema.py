@@ -514,6 +514,52 @@ class AiMessage(BaseModel):
     updated_at: datetime
 
 
+# ---------------- AI long-term memory (AIAssistantPage + SettingsPage) ----------------
+# Trí nhớ dài hạn do user tự quản lý trong Settings ("Quản lí trí nhớ AI").
+# - ai_memories: 1 dòng cho mỗi mẩu AI cần nhớ về user (sở thích, mục tiêu...).
+#   tag cố định 6 giá trị để lọc nhanh bằng index (user_id, tag).
+#   content 1..500 ký tự, tối đa 50 dòng/user (chặn tốn token).
+# - Chỉ CRUD thủ công, KHÔNG cho AI tự ghi (theo chốt với user).
+# - POST /api/ai/chat tự ĐỌC trước mỗi lượt chat (xem agent_tools/long_term_memory.py):
+#   ưu tiên lọc theo tag liên quan (dùng index), fallback đọc mới nhất.
+
+MEMORY_TAG_VALUES = ("info", "hobby", "study", "goal", "habit", "note")
+MEMORY_TAG_PATTERN = r"^(info|hobby|study|goal|habit|note)$"
+MEMORY_CONTENT_MAX_LENGTH = 500
+MEMORY_MAX_PER_USER = 50
+
+
+class AiMemoryCreate(BaseModel):
+    """POST /ai/memory — thêm 1 mẩu trí nhớ (tag + content)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    tag: str = Field(default="note", pattern=MEMORY_TAG_PATTERN)
+    content: str = Field(min_length=1, max_length=MEMORY_CONTENT_MAX_LENGTH)
+
+
+class AiMemoryUpdate(BaseModel):
+    """PUT/PATCH /ai/memory/{id} — sửa tag/content (chỉ field được gửi mới đổi)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    tag: str | None = Field(default=None, pattern=MEMORY_TAG_PATTERN)
+    content: str | None = Field(default=None, min_length=1, max_length=MEMORY_CONTENT_MAX_LENGTH)
+
+
+class AiMemory(BaseModel):
+    """Một mẩu trí nhớ dài hạn của chính mình."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    tag: str = Field(pattern=MEMORY_TAG_PATTERN)
+    content: str
+    created_at: datetime
+    updated_at: datetime
+
+
 # ---------------- Roadmaps (RoadmapPage.jsx) ----------------
 # Lộ trình học 3 bảng chuẩn: roadmaps + roadmap_stages + roadmap_lessons.
 # - roadmaps: scalar từ draft (title, subject, start/end_date, start_time +
@@ -719,6 +765,55 @@ class RoadmapDetail(Roadmap):
 
     stages: list[RoadmapStage] = Field(default_factory=list)
     lessons: list[RoadmapLesson] = Field(default_factory=list)
+
+
+# ---------------- Web Push (PushPage / SW) ----------------
+# Đăng ký thiết bị nhận thông báo: frontend subscribe PushManager với
+# VAPID public key rồi POST {endpoint, keys{p256dh, auth}} lên /push/subscribe.
+
+
+class PushSubscriptionKeys(BaseModel):
+    """Cặp key mã hóa của 1 subscription (do PushManager sinh)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    p256dh: str = Field(min_length=1, max_length=512)
+    auth: str = Field(min_length=1, max_length=512)
+
+
+class PushSubscriptionCreate(BaseModel):
+    """POST /push/subscribe — lưu 1 thiết bị. Gửi lại cùng endpoint -> cập nhật key."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    endpoint: str = Field(min_length=1, max_length=2000)
+    keys: PushSubscriptionKeys
+    user_agent: str | None = Field(default=None, max_length=512)
+
+
+class PushSubscription(BaseModel):
+    """1 thiết bị đã bật thông báo của chính mình."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    endpoint: str
+    p256dh: str
+    auth: str
+    user_agent: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class PushTestRequest(BaseModel):
+    """POST /push/test — gửi thử tới tất cả thiết bị của chính mình."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str = Field(default="Nhịp Học", min_length=1, max_length=120)
+    body: str = Field(default="Thông báo thử từ Nhịp Học.", min_length=1, max_length=500)
+    url: str = Field(default="/#/dashboard", max_length=2000)
 
 
 # ---------------- Weekly tasks (WeeklyTasksPage.jsx) ----------------

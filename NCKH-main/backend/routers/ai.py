@@ -3,11 +3,20 @@
 Contract (JSON, không stream — theo chốt với user):
 - POST /api/ai/chat
 - Request: { "messages": [{ "role": "user"|"assistant", "content": "..." }], "message": "..." (optional),
-             "aiTone": "cute|honest|funny|empathetic" (optional — giọng frontend đang xem, ưu tiên hơn DB) }
+              "aiTone": "cute|honest|funny|empathetic" (optional — giọng frontend đang xem, ưu tiên hơn DB),
+              "tags": ["info"|"hobby"|"study"|"goal"|"habit"|"note"] (optional — hint lọc trí nhớ),
+              "sessionId": "uuid" (optional — id phiên chat đang mở, để log/trace) }
   Frontend gửi toàn bộ hội thoại đang hiển thị; backend không lưu memory server-side.
   Văn phong trả lời lấy theo aiTone trong request, thiếu thì đọc user_preferences.ai_tone,
   rồi nối khối văn phong tương ứng (agent_tools/system_prompt.py) vào system prompt.
-- Response: { "reply": "...", "model": "...", "ai_tone": "cute" } (giọng đã áp dụng)
+- Response: { "reply": "...", "model": "...", "ai_tone": "cute",
+               "memory_used": 0, "memory_tags": [] } (giọng + memory đã áp dụng)
+
+Trí nhớ dài hạn (bảng ai_memories, user tự quản trong Settings):
+- Mỗi lượt chat backend ĐỌC TRƯỚC bảng này rồi mới gọi model
+  (xem agent_tools/long_term_memory.py): ưu tiên lọc theo tag
+  (tags hint -> suy từ câu hỏi -> mới nhất), dùng index (user_id, tag).
+- Lỗi DB memory luôn fallback chat thường, không vỡ chat.
 
 Dùng OpenAI SDK trỏ về OpenRouter (base_url=https://openrouter.ai/api/v1).
 Key lấy từ backend/.env (OPENROUTER_API_KEY), không bao giờ lộ ra frontend.
@@ -22,10 +31,19 @@ Search hỏng/rate-limit thì fallback trả lời chay, không vỡ chat.
 
 import json
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from agent_tools.long_term_memory import (
+    MEMORY_TAG_VALUES as LONG_TERM_TAG_VALUES,
+)
+from agent_tools.long_term_memory import (
+    fetch_relevant_memories,
+    format_long_term_memory,
+    normalize_memory_tags,
+)
 from agent_tools.system_prompt import SYSTEM_PROMPT, build_chat_messages, normalize_ai_tone
 from agent_tools.web_search import TOOL_SPEC as SEARCH_TOOL_SPEC
 from agent_tools.web_search import (
@@ -39,6 +57,7 @@ from agent_tools.web_search import (
     search_documents,
 )
 from auth import SupabaseUser, get_current_supabase_user
+from async_utils import run_blocking
 from config import get_settings
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -55,7 +74,10 @@ MAX_SEARCH_TURNS = 1
 SEARCH_CONTEXT_INSTRUCTION = (
     "Dưới đây là kết quả tìm kiếm web mới nhất cho câu hỏi của học sinh. "
     "Hãy trả lời ngắn gọn bằng tiếng Việt, tóm tắt 2-4 điểm chính rồi liệt kê "
-    "các link (giữ nguyên URL) để bạn ấy bấm vào đọc tiếp. Không bịa thêm link."
+    "các link (giữ nguyên URL, mỗi link một dòng dạng Markdown [tiêu đề](url)) "
+    "để bạn ấy bấm vào đọc tiếp. Không bịa thêm link. "
+    "TUYỆT ĐỐI KHÔNG viết câu kiểu \"bạn hãy tìm...\", \"hãy search...\", "
+    "\"lên Google tìm...\" — link thật đã có ngay bên dưới, hãy đưa link ra luôn."
 )
 SEARCH_FAILED_NOTE = (
     "Công cụ tìm kiếm web vừa không trả kết quả. Hãy trả lời bằng kiến thức của bạn "
@@ -77,6 +99,12 @@ class ChatRequest(BaseModel):
     # Frontend gửi camelCase `aiTone` (bản chưa bấm Lưu); backend ưu tiên giá trị này,
     # thiếu thì đọc từ DB, hỏng DB thì fallback 'cute'.
     ai_tone: str | None = Field(default=None, max_length=20, alias="aiTone")
+    # Hint lọc trí nhớ dài hạn (Settings "Quản lí trí nhớ AI" -> ai_memories.tag).
+    # Frontend (AIAssistantPage) gửi tag đang lọc / suy từ câu hỏi; backend chuẩn hóa
+    # về 6 tag hợp lệ, lạ/rỗng thì tự suy từ câu hỏi rồi fallback đọc mới nhất.
+    # Gửi camelCase `sessionId` (id phiên chat đang mở) để trace, không bắt buộc.
+    tags: list[str] | None = Field(default=None, max_length=6)
+    session_id: UUID | None = Field(default=None, alias="sessionId")
 
 
 class ChatResponse(BaseModel):
@@ -84,6 +112,9 @@ class ChatResponse(BaseModel):
     model: str
     # Giọng văn đã áp dụng cho câu trả lời (để frontend hiển thị đúng lựa chọn của user).
     ai_tone: str = "cute"
+    # Trí nhớ dài hạn đã dùng cho lượt này (để frontend debug/hiển thị "AI có nhớ bạn").
+    memory_used: int = 0
+    memory_tags: list[str] = Field(default_factory=list)
 
 
 def _normalize_messages(payload: ChatRequest) -> list[dict]:
@@ -166,7 +197,7 @@ def _run_search(query: str, max_results: int = SEARCH_DEFAULT_MAX_RESULTS) -> li
         return []
 
 
-def _resolve_ai_tone(payload: ChatRequest, current: SupabaseUser) -> str:
+async def _resolve_ai_tone(payload: ChatRequest, current: SupabaseUser) -> str:
     """Chất giọng AI hiệu lực: request (bản chưa Lưu) > DB user_preferences > 'cute'."""
     direct = (payload.ai_tone or "").strip()
     if direct:
@@ -174,13 +205,15 @@ def _resolve_ai_tone(payload: ChatRequest, current: SupabaseUser) -> str:
     try:
         from supabase_client import get_supabase_admin
 
-        result = (
-            get_supabase_admin()
-            .table("user_preferences")
-            .select("ai_tone")
-            .eq("id", str(current.id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table("user_preferences")
+                .select("ai_tone")
+                .eq("id", str(current.id))
+                .limit(1)
+                .execute()
+            )
         )
         rows = getattr(result, "data", None) or []
         if rows and isinstance(rows[0], dict) and rows[0].get("ai_tone"):
@@ -191,11 +224,13 @@ def _resolve_ai_tone(payload: ChatRequest, current: SupabaseUser) -> str:
 
 
 @router.post("/chat", response_model=ChatResponse)
-def chat_with_ai(
+async def chat_with_ai(
     payload: ChatRequest,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> ChatResponse:
     """Chat 2 chiều với model OpenRouter (JSON, không stream)."""
+    import asyncio
+
     settings = get_settings()
     api_key = (settings.openrouter_api_key or "").strip()
     if not api_key:
@@ -206,8 +241,15 @@ def chat_with_ai(
     model = (settings.openrouter_model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
     user_messages = _normalize_messages(payload)
     last_user_text = next((m["content"] for m in reversed(user_messages) if m["role"] == "user"), "")
-    ai_tone = _resolve_ai_tone(payload, current)
-    base_messages = build_chat_messages(user_messages, ai_tone=ai_tone)
+    # Giọng AI (DB) + trí nhớ dài hạn (DB): 2 query độc lập -> chạy song song.
+    tags_hint = normalize_memory_tags(payload.tags)
+    ai_tone, memory_rows = await asyncio.gather(
+        _resolve_ai_tone(payload, current),
+        run_blocking(fetch_relevant_memories, current.id, last_user_text, tags_hint),
+    )
+    memory_text = format_long_term_memory(memory_rows)
+    memory_tags = sorted({str(r.get("tag", "")) for r in (memory_rows or []) if str(r.get("tag", "")) in LONG_TERM_TAG_VALUES})
+    base_messages = build_chat_messages(user_messages, memory_text=memory_text or None, ai_tone=ai_tone)
 
     try:
         from openai import OpenAI
@@ -233,7 +275,7 @@ def chat_with_ai(
     # kèm kết quả. Không phụ thuộc model có hỗ trợ function-calling hay không.
     if looks_like_search_request(last_user_text):
         query = extract_search_query(last_user_text)
-        found = _run_search(query)
+        found = await run_blocking(_run_search, query)
         if found:
             with_context = [
                 *base_messages,
@@ -242,19 +284,28 @@ def chat_with_ai(
                     "content": SEARCH_CONTEXT_INSTRUCTION + "\n" + format_results_for_llm(found, query),
                 },
             ]
-            completion = _request_completion(client, model, with_context, extra_headers)
-            return ChatResponse(reply=_extract_reply(completion), model=model, ai_tone=ai_tone)
+            completion = await run_blocking(_request_completion, client, model, with_context, extra_headers)
+            return ChatResponse(
+                reply=_extract_reply(completion),
+                model=model,
+                ai_tone=ai_tone,
+                memory_used=len(memory_rows),
+                memory_tags=memory_tags,
+            )
         # Search hỏng/rỗng → rơi xuống chat thường bên dưới.
 
     # Nhánh 2 — agentic: để model tự quyết định gọi tool search_documents.
     try:
-        first = _request_completion(client, model, base_messages, extra_headers, tools=[SEARCH_TOOL_SPEC])
+        first = await run_blocking(_request_completion, client, model, base_messages, extra_headers, [SEARCH_TOOL_SPEC])
     except HTTPException as error:
         # Model/endpoint không hỗ trợ tools → chat thường, giữ nguyên hành vi cũ.
         if "tool" not in str(error.detail).lower():
             raise
-        plain = _request_completion(client, model, base_messages, extra_headers)
-        return ChatResponse(reply=_extract_reply(plain), model=model, ai_tone=ai_tone)
+        plain = await run_blocking(_request_completion, client, model, base_messages, extra_headers)
+        return ChatResponse(
+            reply=_extract_reply(plain), model=model, ai_tone=ai_tone,
+            memory_used=len(memory_rows), memory_tags=memory_tags,
+        )
 
     calls = list(getattr(first.choices[0].message, "tool_calls", None) or [])
     search_call = next(
@@ -262,7 +313,10 @@ def chat_with_ai(
         None,
     )
     if search_call is None:
-        return ChatResponse(reply=_extract_reply(first), model=model, ai_tone=ai_tone)
+        return ChatResponse(
+            reply=_extract_reply(first), model=model, ai_tone=ai_tone,
+            memory_used=len(memory_rows), memory_tags=memory_tags,
+        )
 
     try:
         args = json.loads(getattr(search_call.function, "arguments", "") or "{}")
@@ -275,7 +329,7 @@ def chat_with_ai(
         limit = int(args.get("max_results", SEARCH_DEFAULT_MAX_RESULTS))
     except (TypeError, ValueError):
         limit = SEARCH_DEFAULT_MAX_RESULTS
-    found = _run_search(query, max_results=limit)
+    found = await run_blocking(_run_search, query, limit)
     if found:
         tool_content = format_results_for_llm(found, query)
     else:
@@ -300,5 +354,8 @@ def chat_with_ai(
         {"role": "tool", "tool_call_id": getattr(search_call, "id", "call_1"), "content": tool_content},
     ]
     # Chỉ 1 lượt search/lượt chat (MAX_SEARCH_TURNS): lượt 2 không kèm tools nữa.
-    second = _request_completion(client, model, second_messages, extra_headers)
-    return ChatResponse(reply=_extract_reply(second), model=model, ai_tone=ai_tone)
+    second = await run_blocking(_request_completion, client, model, second_messages, extra_headers)
+    return ChatResponse(
+        reply=_extract_reply(second), model=model, ai_tone=ai_tone,
+        memory_used=len(memory_rows), memory_tags=memory_tags,
+    )

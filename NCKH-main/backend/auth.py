@@ -14,6 +14,7 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from async_utils import run_blocking
 from config import get_settings
 
 bearer = HTTPBearer(auto_error=False)
@@ -60,12 +61,12 @@ def _verify_locally(token: str) -> UUID | None:
         raise unauthorized()
 
 
-def _verify_via_api(token: str) -> SupabaseUser:
-    """Fallback: hỏi Supabase Auth API xem token có hợp lệ không."""
+async def _verify_via_api(token: str) -> SupabaseUser:
+    """Fallback: hỏi Supabase Auth API xem token có hợp lệ không (chạy threadpool)."""
     from supabase_client import get_supabase_admin
 
     try:
-        response = get_supabase_admin().auth.get_user(token)
+        response = await run_blocking(get_supabase_admin().auth.get_user, token)
     except Exception as error:
         raise unauthorized() from error
     user = response.user if hasattr(response, "user") else response.get("user")
@@ -79,7 +80,7 @@ def _verify_via_api(token: str) -> SupabaseUser:
         raise unauthorized() from error
 
 
-def get_current_supabase_user(
+async def get_current_supabase_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
 ) -> SupabaseUser:
     if not credentials or credentials.scheme.lower() != "bearer" or not credentials.credentials:
@@ -89,10 +90,10 @@ def get_current_supabase_user(
     user_id = _verify_locally(token)
     if user_id is not None:
         return SupabaseUser(id=user_id)
-    return _verify_via_api(token)
+    return await _verify_via_api(token)
 
 
-def get_current_user_id(
+async def get_current_user_id(
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> UUID:
     return current.id

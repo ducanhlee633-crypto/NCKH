@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from config import get_settings
 from services.stress import compute_stress
@@ -88,29 +89,54 @@ def _short(text: object, limit: int = 60) -> str:
 
 
 @router.post("/analyze", response_model=WellbeingAiResponse)
-def analyze_wellbeing(
+async def analyze_wellbeing(
     payload: WellbeingAiRequest | None = None,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> WellbeingAiResponse:
     """Gom dữ liệu thật -> tính điểm (bản 4 tín hiệu) -> nhờ AI gợi cách cải thiện."""
+    import asyncio
+
     note = _short((payload.note if payload else ""), 500)
     today = datetime.now(timezone.utc).date()
     week_ago = today - timedelta(days=7)
     user_id = str(current.id)
+
+    async def _deadlines():
+        return await run_blocking(
+            lambda: (
+                get_supabase_admin().table("deadlines").select("due_date,status,title").eq("user_id", user_id).execute()
+            )
+        )
+
+    async def _weekly():
+        return await run_blocking(
+            lambda: (
+                get_supabase_admin().table("weekly_tasks").select("date,status,title").eq("user_id", user_id).execute()
+            )
+        )
+
+    async def _pomodoros():
+        return await run_blocking(
+            lambda: (
+                get_supabase_admin().table("pomodoro_sessions").select("started_at").eq("user_id", user_id).execute()
+            )
+        )
+
+    async def _daily():
+        return await run_blocking(
+            lambda: (
+                get_supabase_admin().table("daily_tasks").select("task_date,done,title").eq("user_id", user_id).execute()
+            )
+        )
+
     try:
-        db = get_supabase_admin()
-        deadlines = (
-            db.table("deadlines").select("due_date,status,title").eq("user_id", user_id).execute().data or []
+        deadline_rows, weekly_rows, pomodoro_rows, daily_rows = await asyncio.gather(
+            _deadlines(), _weekly(), _pomodoros(), _daily()
         )
-        weekly = (
-            db.table("weekly_tasks").select("date,status,title").eq("user_id", user_id).execute().data or []
-        )
-        pomodoros = (
-            db.table("pomodoro_sessions").select("started_at").eq("user_id", user_id).execute().data or []
-        )
-        daily = (
-            db.table("daily_tasks").select("task_date,done,title").eq("user_id", user_id).execute().data or []
-        )
+        deadlines = deadline_rows.data or []
+        weekly = weekly_rows.data or []
+        pomodoros = pomodoro_rows.data or []
+        daily = daily_rows.data or []
     except Exception as error:
         _db_error(error)
 
@@ -216,7 +242,8 @@ def analyze_wellbeing(
         extra_headers["X-Title"] = settings.openrouter_app_name
     client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key, timeout=60.0)
     try:
-        completion = client.chat.completions.create(
+        completion = await run_blocking(
+            client.chat.completions.create,
             model=model,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},

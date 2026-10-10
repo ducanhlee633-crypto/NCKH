@@ -28,7 +28,6 @@ table {
 @media (max-width: 760px) {
   /* 1. Ẩn sidebar desktop (thay bằng bottom tab), giữ lại cho print/a11y. */
   .sidebar,
-  .sidebar-collapse-btn,
   .sidebar-toggle {
     display: none !important;
   }

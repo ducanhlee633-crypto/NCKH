@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from schema import GOAL_STATUS_VALUES, Goal, GoalCreate, GoalUpdate
 from supabase_client import get_supabase_admin
@@ -49,16 +50,18 @@ def _check_dates(start_day: va_date | None, end_day: va_date | None) -> None:
         )
 
 
-def _fetch_one(goal_id: UUID, user_id: UUID) -> dict:
+async def _fetch_one(goal_id: UUID, user_id: UUID) -> dict:
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("id", str(goal_id))
-            .eq("user_id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("id", str(goal_id))
+                .eq("user_id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -68,7 +71,7 @@ def _fetch_one(goal_id: UUID, user_id: UUID) -> dict:
 
 
 @router.get("", response_model=list[Goal])
-def list_goals(
+async def list_goals(
     current: SupabaseUser = Depends(get_current_supabase_user),
     goal_status: str | None = Query(default=None, alias="status"),
     from_day: va_date | None = Query(default=None, alias="from"),
@@ -86,12 +89,14 @@ def list_goals(
             detail="Ngày 'from' phải trước hoặc bằng ngày 'to'.",
         )
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("user_id", str(current.id))
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("user_id", str(current.id))
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -116,7 +121,7 @@ def list_goals(
 
 
 @router.post("", response_model=Goal, status_code=status.HTTP_201_CREATED)
-def create_goal(
+async def create_goal(
     payload: GoalCreate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Goal:
@@ -131,8 +136,10 @@ def create_goal(
         )
     values["user_id"] = str(current.id)
     try:
-        result = (
-            get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -142,16 +149,16 @@ def create_goal(
 
 
 @router.get("/{goal_id}", response_model=Goal)
-def read_goal(
+async def read_goal(
     goal_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Goal:
     """Đọc 1 mục tiêu của chính mình."""
-    return _to_goal(_fetch_one(goal_id, current.id))
+    return _to_goal(await _fetch_one(goal_id, current.id))
 
 
-def _apply_update(goal_id: UUID, payload: GoalUpdate, user_id: UUID) -> Goal:
-    row = _fetch_one(goal_id, user_id)
+async def _apply_update(goal_id: UUID, payload: GoalUpdate, user_id: UUID) -> Goal:
+    row = await _fetch_one(goal_id, user_id)
     current = _to_goal(row)
     values = payload.model_dump(exclude_unset=True, mode="json")
     if "title" in values and values["title"] is not None:
@@ -173,14 +180,16 @@ def _apply_update(goal_id: UUID, payload: GoalUpdate, user_id: UUID) -> Goal:
     except ValueError:
         pass
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .update(values)
-            .eq("id", str(goal_id))
-            .eq("user_id", str(user_id))
-            .select(COLUMNS)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .update(values)
+                .eq("id", str(goal_id))
+                .eq("user_id", str(user_id))
+                .select(COLUMNS)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -190,36 +199,40 @@ def _apply_update(goal_id: UUID, payload: GoalUpdate, user_id: UUID) -> Goal:
 
 
 @router.put("/{goal_id}", response_model=Goal)
-def update_goal(
+async def update_goal(
     goal_id: UUID,
     payload: GoalUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Goal:
     """Sửa mục tiêu (chỉ field được gửi mới đổi)."""
-    return _apply_update(goal_id, payload, current.id)
+    return await _apply_update(goal_id, payload, current.id)
 
 
 @router.patch("/{goal_id}", response_model=Goal)
-def patch_goal(
+async def patch_goal(
     goal_id: UUID,
     payload: GoalUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Goal:
     """Alias của PUT cho client thích PATCH từng field (VD: đổi status/progress)."""
-    return _apply_update(goal_id, payload, current.id)
+    return await _apply_update(goal_id, payload, current.id)
 
 
 @router.delete("/{goal_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_goal(
+async def delete_goal(
     goal_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Response:
     """Xóa mục tiêu (204)."""
-    _fetch_one(goal_id, current.id)
+    await _fetch_one(goal_id, current.id)
     try:
-        get_supabase_admin().table(TABLE).delete().eq("id", str(goal_id)).eq(
-            "user_id", str(current.id)
-        ).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).delete().eq("id", str(goal_id)).eq(
+                    "user_id", str(current.id)
+                ).execute()
+            )
+        )
     except Exception as error:
         _db_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

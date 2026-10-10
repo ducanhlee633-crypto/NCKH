@@ -1,6 +1,7 @@
 import AiMarkdown from '../components/AiMarkdown'
 import useStoredState from '../data/useStoredState'
 import { AI_TONES, loadSettings, normalizeAiTone } from '../data/settings'
+import { inferMemoryTags } from '../data/memory'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CardHeader, SectionCard } from '../components/PageComponents'
 import {
@@ -9,6 +10,7 @@ import {
   createAiMessage,
   createAiSession,
   deleteAiSession,
+  fetchAiMemories,
   fetchAiMessages,
   fetchAiSessions,
   getSession,
@@ -81,9 +83,31 @@ export default function AIAssistantPage() {
   }, [])
   const [aiError, setAiError] = useState('')
   const [saveWarning, setSaveWarning] = useState('')
+  // Trí nhớ dài hạn (ai_memories): đọc trước mỗi lần vào session chat để AI biết user là ai.
+  // Backend POST /ai/chat cũng tự đọc lại nên đây là lớp "đọc trước" ở frontend
+  // (warm + hiển thị huy hiệu "AI nhớ N điều"), lỗi thì bỏ qua, chat vẫn chạy.
+  const [memoryCount, setMemoryCount] = useState(0)
   const inputRef = useRef(null)
   const fileRef = useRef(null)
   const messagesRef = useRef(null)
+
+  const readMemoryBeforeSession = useCallback(async () => {
+    if (!getSession()) {
+      setMemoryCount(0)
+      return []
+    }
+    try {
+      const rows = await fetchAiMemories({ limit: 50 })
+      setMemoryCount(Array.isArray(rows) ? rows.length : 0)
+      return rows
+    } catch {
+      return []
+    }
+  }, [])
+
+  useEffect(() => {
+    readMemoryBeforeSession()
+  }, [readMemoryBeforeSession])
 
   const safeMessages = (Array.isArray(messages) ? messages : []).map(normalizeMessage).filter(Boolean)
 
@@ -148,7 +172,12 @@ export default function AIAssistantPage() {
     setInput('')
     setMessagesLoading(true)
     try {
-      const rows = await fetchAiMessages(session.id)
+      // Đọc bảng personalize TRƯỚC khi đọc tin nhắn session (theo yêu cầu train AI):
+      // backend cũng đọc lại khi chat, đây là lớp đọc trước ở frontend để warm + đếm huy hiệu.
+      const [rows] = await Promise.all([
+        fetchAiMessages(session.id),
+        readMemoryBeforeSession(),
+      ])
       setMessages(rows.map(aiMessageFromServer))
     } catch (failure) {
       setAiError(failure.friendlyMessage || 'Không tải được tin nhắn.')
@@ -230,7 +259,12 @@ export default function AIAssistantPage() {
           setSaveWarning(failure.friendlyMessage || 'Không lưu được tin nhắn lên server.')
         }
       }
-      const reply = await sendAiChat(aiMessagesToPayload(nextMessages))
+      const reply = await sendAiChat(aiMessagesToPayload(nextMessages), {
+        // Gợi ý tag để backend lọc trí nhớ bằng index (user_id, tag) cho nhanh.
+        // Thiếu thì backend tự suy từ câu hỏi rồi fallback đọc mới nhất.
+        tags: inferMemoryTags(question),
+        sessionId,
+      })
       const assistantMessage = { id: crypto.randomUUID(), role: 'assistant', text: reply }
       const withReply = [...nextMessages, assistantMessage]
       setMessages(withReply)
@@ -275,7 +309,7 @@ export default function AIAssistantPage() {
   return (
     <>
       {(uploadError || inputError || historyError || localActiveIdError || filesError) && <p role="alert">{uploadError || inputError || historyError || localActiveIdError || filesError}</p>}
-      <section className="ai-banner"><div className="ai-orb">✦</div><div><h1>Trợ lý học tập</h1><p>Ghi câu hỏi, nêu cách đã làm, tìm phần cần hiểu thêm.</p></div><span>{sending ? 'AI đang trả lời…' : 'Đã kết nối AI'}</span><span className="ai-tone-badge" title="Chất giọng AI — đổi trong Cài đặt cá nhân">{(AI_TONES[aiTone] ?? AI_TONES.cute)[1]} {(AI_TONES[aiTone] ?? AI_TONES.cute)[0]}</span></section>
+      <section className="ai-banner"><div className="ai-orb">✦</div><div><h1>Trợ lý học tập</h1><p>Ghi câu hỏi, nêu cách đã làm, tìm phần cần hiểu thêm.</p></div><span>{sending ? 'AI đang trả lời…' : 'Đã kết nối AI'}</span><span className="ai-tone-badge" title="Chất giọng AI — đổi trong Cài đặt cá nhân">{(AI_TONES[aiTone] ?? AI_TONES.cute)[1]} {(AI_TONES[aiTone] ?? AI_TONES.cute)[0]}</span>{loggedIn && memoryCount > 0 && <span className="ai-tone-badge" title="Trí nhớ dài hạn — quản lý trong Cài đặt cá nhân">🧠 Nhớ {memoryCount} điều</span>}</section>
       <div className="ai-layout ai-layout-simple">
         <aside className="ai-left">
           <button className="new-chat" onClick={newChat}>＋ <span>Cuộc trò chuyện mới</span></button>
@@ -287,7 +321,7 @@ export default function AIAssistantPage() {
           {aiError && <p className="ai-error" role="alert">{aiError}</p>}
           {saveWarning && <p className="ai-error" role="status">{saveWarning}</p>}
           <form className="chat-composer" onSubmit={send}><input ref={inputRef} value={input} onChange={(event) => setInput(event.target.value)} aria-label="Câu hỏi học tập" placeholder="Nêu môn, lớp và phần bạn chưa hiểu…" disabled={sending || messagesLoading} /><button disabled={!input.trim() || sending} aria-label="Gửi câu hỏi">{sending ? '…' : '↑'}</button></form>
-          <p className="ai-service-note" role="status">{loggedIn ? 'Đã đăng nhập: lịch sử chat được lưu trên server, tên lấy từ tin nhắn đầu tiên.' : 'Bạn cần đăng nhập để chat với AI. Câu hỏi và tài liệu chỉ được lưu trên thiết bị này.'}</p>
+          <p className="ai-service-note" role="status">{loggedIn ? `Đã đăng nhập: lịch sử chat được lưu trên server, tên lấy từ tin nhắn đầu tiên.${memoryCount > 0 ? ` AI đang nhớ ${memoryCount} điều về bạn (xem/sửa trong Cài đặt → Quản lí trí nhớ AI).` : ' Thêm trí nhớ trong Cài đặt → Quản lí trí nhớ AI để AI hiểu bạn hơn.'}` : 'Bạn cần đăng nhập để chat với AI. Câu hỏi và tài liệu chỉ được lưu trên thiết bị này.'}</p>
         </SectionCard>
 
       </div>

@@ -48,9 +48,11 @@ TOOL_SPEC: dict[str, Any] = {
     "function": {
         "name": "search_documents",
         "description": (
-            "Tìm tài liệu học tập trên web bằng DuckDuckGo. "
-            "Dùng khi học sinh nhờ tìm tài liệu, đề thi, bài giảng, sách. "
-            "Trả về danh sách tiêu đề + link + mô tả ngắn."
+            "Tìm tài liệu học tập trên web bằng DuckDuckGo, trả về tiêu đề + link + mô tả ngắn. "
+            "BẮT BUỘC gọi tool này khi học sinh nhắc tới link/tài liệu/đề thi/đề cương/sách/"
+            "bài giảng/video, hoặc muốn lộ trình kèm tài liệu — thay vì bảo học sinh "
+            "tự đi tìm (\"hãy tìm...\", \"lên Google tìm...\"). "
+            "Không tự bịa link, chỉ dùng link tool trả về."
         ),
         "parameters": {
             "type": "object",
@@ -87,6 +89,53 @@ SEARCH_KEYWORDS = (
     "tài liệu cho",
     "link tài liệu",
     "xin tài liệu",
+    # Biến thể không dấu (học sinh gõ nhanh không bật Telex/VNI).
+    "tim tai lieu",
+    "tim giup",
+    "tim ho",
+    "tim de",
+    "tim bai",
+    "tim link",
+    "tim sach",
+    "tai lieu ve",
+    "tai lieu cho",
+    "xin tai lieu",
+)
+
+# Động từ nhờ vả + danh từ tài liệu: bắt các cách nói không nằm trong
+# SEARCH_KEYWORDS, VD: "cho mình link este", "gửi mình đề toán 8",
+# "cần tài liệu ôn thi", "kiếm giúp sách lớp 10", "tìm video bài giảng",
+# "tìm giáo trình", "tìm lộ trình kèm tài liệu".
+_REQUEST_VERB_RES = (
+    r"tìm|tim|kiếm|kiem|xin|cho|gửi|gui|gởi|cần|can|share|"
+    r"lấy|lay|đưa|dua|giới thiệu|gioi thieu"
+)
+_OBJECT_NOUN_RES = (
+    r"tài liệu|tai lieu|link|đề thi|de thi|đề cương|de cuong|đề kiểm tra|de kiem tra|"
+    r"bộ đề|bo de|đề|de|sách|sach|giáo trình|giao trinh|bài giảng|bai giang|"
+    r"bài tập|bai tap|video|clip|lộ trình|lo trinh|"
+    r"roadmap|tài liệu ôn|tai lieu on|tài liệu tham khảo"
+)
+# "tìm/tim" đứng đầu câu + chủ đề (VD: "tìm este lớp 12", "tim phuong trinh bac 2")
+# -> chắc chắn là nhờ tìm link, không phải hỏi kiến thức.
+_FIND_LEAD_RE = re.compile(
+    r"^(?:bạn(?:\s+ơi)?[,.]?\s*|cho\s+mình\s+|giúp\s+mình\s+)?"
+    r"(?:tìm|tim)\s+(?!hiểu\s+về\s*$|hiểu\s*$)(?=\S)",
+    re.IGNORECASE,
+)
+# Động từ nhờ vả + danh từ tài liệu ở bất kỳ đâu trong câu.
+_REQUEST_OBJECT_RE = re.compile(
+    rf"\b(?:{_REQUEST_VERB_RES})\b.{{0,20}}?\b(?:{_OBJECT_NOUN_RES})"
+    rf"|\b(?:{_OBJECT_NOUN_RES}).{{0,20}}?\b(?:{_REQUEST_VERB_RES})\b",
+    re.IGNORECASE,
+)
+# Muốn lộ trình kèm tài liệu/link (chat thường, chưa vào trang Lộ trình học).
+_ROADMAP_WITH_DOCS_RE = re.compile(
+    r"(?:tạo|tao|lập|lap|soạn|soan|lên|len|dựng|dung)\s+.{0,30}?"
+    r"(?:lộ trình|lo trinh|roadmap|kế hoạch học|ke hoach hoc)"
+    r"|(?:lộ trình|lo trinh|roadmap).{0,30}?"
+    r"(?:kèm|kem|có|co|gửi|gui|cho|xin|tìm|tim|link|tài liệu|tai lieu)",
+    re.IGNORECASE,
 )
 
 
@@ -115,25 +164,61 @@ def score_result(url: str, title: str = "") -> int:
 
 
 def looks_like_search_request(text: str) -> bool:
-    """Câu hỏi có phải đang nhờ tìm tài liệu không (soi từ khóa, không gọi LLM)."""
+    """Câu hỏi có phải đang nhờ tìm tài liệu/link không (soi từ khóa, không gọi LLM).
+
+    Bắt cả cách nói vắn tắt ("tìm este lớp 12", "tim phuong trinh bac 2",
+    "cho mình link este", "cần đề toán 8", "tạo lộ trình kèm tài liệu")
+    để backend tự search và trả link thật, thay vì để model gợi ý suông
+    kiểu "bạn hãy tìm abc".
+    """
     lowered = re.sub(r"\s+", " ", str(text or "").lower()).strip()
     if not lowered:
         return False
     if any(keyword in lowered for keyword in SEARCH_KEYWORDS):
         return True
-    return bool(re.search(r"\bsearch\b", lowered))
+    if re.search(r"\bsearch\b", lowered):
+        return True
+    # "tìm/tim ..." đứng đầu câu là lệnh tìm link (trừ "tìm hiểu" đơn thuần
+    # hỏi kiến thức mà không nhắc gì tới tài liệu/link/đề/sách).
+    if _FIND_LEAD_RE.search(lowered):
+        if re.search(r"^.{0,40}?\btìm\s+hiểu\b", lowered) and not _REQUEST_OBJECT_RE.search(lowered):
+            # "tìm hiểu về este" đơn thuần -> hỏi kiến thức, không search.
+            pass
+        else:
+            return True
+    if _ROADMAP_WITH_DOCS_RE.search(lowered):
+        return True
+    if _REQUEST_OBJECT_RE.search(lowered):
+        return True
+    return False
 
 
 # Chỉ bóc động từ nhờ vả + từ phụ, GIỮ lại danh từ ("đề thi", "bài tập",
 # "sách giáo khoa" là một phần của từ khóa, không được nuốt).
 _TRIGGER_RE = re.compile(
-    r"(?:tìm\s+(?:tài\s+liệu|giúp|hộ|jum|link)?|xin\s+(?:tài\s+liệu)?|link\s+tài\s+liệu|tài\s+liệu)"
-    r"\s*(?:về|cho|với|chủ đề)?\s*",
+    r"(?:(?:tìm|tim)\s+(?:tài\s+liệu|tai\s+lieu|giúp|giup|hộ|ho|jum|link)?"
+    r"|(?:kiếm|kiem)\s+(?:giúp|giup|hộ|ho)?\s*"
+    r"|xin\s+(?:tài\s+liệu|tai\s+lieu|link)?"
+    r"|(?:cho|gửi|gui|gởi|cần|can|lấy|lay|đưa|dua)\s+(?:mình|mk|tớ|em|anh|chị|bạn\s+)?\s*(?:xin\s+)?(?:link\s+|tài\s+liệu\s+|tai\s+lieu\s+)?"
+    r"|link\s+tài\s+liệu|link\s+tai\s+lieu"
+    r"|tài\s+liệu|tai\s+lieu"
+    r"|(?:tạo|tao|lập|lap|soạn|soan|lên|len|dựng|dung)\s+.{0,20}?lộ\s+trình"
+    r"|lộ\s+trình|lo\s+trinh|roadmap)"
+    r"\s*(?:về|ve|cho|với|voi|chủ đề|chu de|kèm|kem|có|môn|mon|học|hoc)?\s*",
     re.IGNORECASE,
 )
-_TAIL_TOKENS = ("giúp mình", "hộ mình", "jum mình", "nhé", "nha", "với ạ", "với", "ạ")
-# Từ xưng hô lịch sự còn sót lại ngay sau cụm kích hoạt ("tìm giúp mình đề thi..." -> "đề thi...").
-_LEAD_TOKENS = ("mình", "mk", "tớ", "em", "anh", "chị", "bạn", "search")
+_TAIL_TOKENS = (
+    "giúp mình", "giup minh", "hộ mình", "ho minh", "jum mình", "nhé", "nha",
+    "với ạ", "voi a", "với", "voi", "ạ", "a", "kèm tài liệu", "kem tai lieu",
+    "kèm link", "có tài liệu", "có link không", "có link", "cho mình",
+)
+# Từ xưng hô / từ thừa còn sót lại ngay sau cụm kích hoạt
+# ("tìm giúp mình đề thi..." -> "đề thi...", "cho mình link este" -> "este").
+_LEAD_TOKENS = (
+    "mình", "mk", "tớ", "em", "anh", "chị", "bạn", "search",
+    "link", "đường link", "duong link", "lộ trình", "lo trinh",
+    "tài liệu", "tai lieu", "học", "hoc", "kèm", "kem",
+)
 
 
 def extract_search_query(text: str) -> str:

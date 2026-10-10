@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from schema import (
     DAILY_TASK_PRIORITY_VALUES,
@@ -60,16 +61,18 @@ def _to_task(row: dict) -> DailyTask:
     return DailyTask.model_validate(data)
 
 
-def _fetch_one(task_id: UUID, user_id: UUID) -> dict:
+async def _fetch_one(task_id: UUID, user_id: UUID) -> dict:
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("id", str(task_id))
-            .eq("user_id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("id", str(task_id))
+                .eq("user_id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -116,7 +119,7 @@ def _sort_key(row: dict):
 
 
 @router.get("", response_model=list[DailyTask])
-def list_daily_tasks(
+async def list_daily_tasks(
     current: SupabaseUser = Depends(get_current_supabase_user),
     from_day: va_date | None = Query(default=None, alias="from"),
     to_day: va_date | None = Query(default=None, alias="to"),
@@ -139,12 +142,14 @@ def list_daily_tasks(
     norm_subject = _norm_str(subject) or None
     norm_q = _norm_str(q) or None
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("user_id", str(current.id))
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("user_id", str(current.id))
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -158,7 +163,7 @@ def list_daily_tasks(
 
 
 @router.post("", response_model=DailyTask, status_code=status.HTTP_201_CREATED)
-def create_daily_task(
+async def create_daily_task(
     payload: DailyTaskCreate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> DailyTask:
@@ -175,8 +180,10 @@ def create_daily_task(
     values["subject"] = subject or None
     values["user_id"] = str(current.id)
     try:
-        result = (
-            get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -186,16 +193,16 @@ def create_daily_task(
 
 
 @router.get("/{task_id}", response_model=DailyTask)
-def read_daily_task(
+async def read_daily_task(
     task_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> DailyTask:
     """Đọc 1 việc hằng ngày của chính mình."""
-    return _to_task(_fetch_one(task_id, current.id))
+    return _to_task(await _fetch_one(task_id, current.id))
 
 
-def _apply_update(task_id: UUID, payload: DailyTaskUpdate, user_id: UUID) -> DailyTask:
-    row = _fetch_one(task_id, user_id)
+async def _apply_update(task_id: UUID, payload: DailyTaskUpdate, user_id: UUID) -> DailyTask:
+    row = await _fetch_one(task_id, user_id)
     current = _to_task(row)
     values = payload.model_dump(exclude_unset=True, mode="json")
     if "title" in values and values["title"] is not None:
@@ -213,14 +220,16 @@ def _apply_update(task_id: UUID, payload: DailyTaskUpdate, user_id: UUID) -> Dai
     if not values:
         return current
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .update(values)
-            .eq("id", str(task_id))
-            .eq("user_id", str(user_id))
-            .select(COLUMNS)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .update(values)
+                .eq("id", str(task_id))
+                .eq("user_id", str(user_id))
+                .select(COLUMNS)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -230,36 +239,40 @@ def _apply_update(task_id: UUID, payload: DailyTaskUpdate, user_id: UUID) -> Dai
 
 
 @router.put("/{task_id}", response_model=DailyTask)
-def update_daily_task(
+async def update_daily_task(
     task_id: UUID,
     payload: DailyTaskUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> DailyTask:
     """Sửa việc hằng ngày (chỉ field được gửi mới đổi)."""
-    return _apply_update(task_id, payload, current.id)
+    return await _apply_update(task_id, payload, current.id)
 
 
 @router.patch("/{task_id}", response_model=DailyTask)
-def patch_daily_task(
+async def patch_daily_task(
     task_id: UUID,
     payload: DailyTaskUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> DailyTask:
     """Alias của PUT — tick checkbox chỉ gửi {done} qua endpoint này."""
-    return _apply_update(task_id, payload, current.id)
+    return await _apply_update(task_id, payload, current.id)
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_daily_task(
+async def delete_daily_task(
     task_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Response:
     """Xóa việc hằng ngày (204)."""
-    _fetch_one(task_id, current.id)
+    await _fetch_one(task_id, current.id)
     try:
-        get_supabase_admin().table(TABLE).delete().eq("id", str(task_id)).eq(
-            "user_id", str(current.id)
-        ).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).delete().eq("id", str(task_id)).eq(
+                    "user_id", str(current.id)
+                ).execute()
+            )
+        )
     except Exception as error:
         _db_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

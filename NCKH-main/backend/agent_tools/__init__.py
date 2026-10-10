@@ -1,5 +1,15 @@
-"""Agent tools: short-memory + system prompt + web search dùng chung."""
+"""Agent tools: short-memory + long-term memory + system prompt + web search dùng chung."""
 
+from .long_term_memory import (
+    MAX_MEMORY_CHARS,
+    MAX_MEMORY_ITEMS,
+    MEMORY_TAG_VALUES as LONG_TERM_MEMORY_TAGS,
+    TAG_KEYWORDS as LONG_TERM_TAG_KEYWORDS,
+    fetch_relevant_memories,
+    format_long_term_memory,
+    infer_tags_from_text,
+    normalize_memory_tags,
+)
 from .short_memory import (
     DEFAULT_KEEP_LAST,
     MAX_CONTEXT_CHARS,
@@ -65,12 +75,16 @@ __all__ = [
     "build_short_memory",
     "estimate_tokens",
     "extract_search_query",
+    "fetch_relevant_memories",
+    "format_long_term_memory",
     "format_memory_for_llm",
     "format_student_context",
     "get_system_prompt",
     "get_tone_instruction",
+    "infer_tags_from_text",
     "looks_like_search_request",
     "normalize_ai_tone",
+    "normalize_memory_tags",
     "render_short_memory_context",
     "search_documents",
     "summarize_older_messages",

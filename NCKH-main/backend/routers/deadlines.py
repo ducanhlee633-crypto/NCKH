@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from schema import Deadline, DeadlineCreate, DeadlineUpdate
 from supabase_client import get_supabase_admin
@@ -43,16 +44,18 @@ def _to_deadline(row: dict) -> Deadline:
     return Deadline.model_validate(data)
 
 
-def _fetch_one(deadline_id: UUID, user_id: UUID) -> dict:
+async def _fetch_one(deadline_id: UUID, user_id: UUID) -> dict:
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("id", str(deadline_id))
-            .eq("user_id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("id", str(deadline_id))
+                .eq("user_id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -67,7 +70,7 @@ def _overlaps(row: dict, from_day: va_date | None, to_day: va_date | None) -> bo
 
 
 @router.get("", response_model=list[Deadline])
-def list_deadlines(
+async def list_deadlines(
     current: SupabaseUser = Depends(get_current_supabase_user),
     from_day: va_date | None = Query(default=None, alias="from"),
     to_day: va_date | None = Query(default=None, alias="to"),
@@ -79,12 +82,14 @@ def list_deadlines(
             detail="Ngày 'from' phải trước hoặc bằng ngày 'to'.",
         )
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("user_id", str(current.id))
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("user_id", str(current.id))
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -94,7 +99,7 @@ def list_deadlines(
 
 
 @router.post("", response_model=Deadline, status_code=status.HTTP_201_CREATED)
-def create_deadline(
+async def create_deadline(
     payload: DeadlineCreate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Deadline:
@@ -102,8 +107,10 @@ def create_deadline(
     values = payload.model_dump(mode="json")
     values["user_id"] = str(current.id)
     try:
-        result = (
-            get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -113,29 +120,31 @@ def create_deadline(
 
 
 @router.get("/{deadline_id}", response_model=Deadline)
-def read_deadline(
+async def read_deadline(
     deadline_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Deadline:
     """Đọc 1 deadline của chính mình."""
-    return _to_deadline(_fetch_one(deadline_id, current.id))
+    return _to_deadline(await _fetch_one(deadline_id, current.id))
 
 
-def _apply_update(deadline_id: UUID, payload: DeadlineUpdate, user_id: UUID) -> Deadline:
-    row = _fetch_one(deadline_id, user_id)
+async def _apply_update(deadline_id: UUID, payload: DeadlineUpdate, user_id: UUID) -> Deadline:
+    row = await _fetch_one(deadline_id, user_id)
     current = _to_deadline(row)
     values = payload.model_dump(exclude_unset=True, mode="json")
     if not values:
         return current
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .update(values)
-            .eq("id", str(deadline_id))
-            .eq("user_id", str(user_id))
-            .select(COLUMNS)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .update(values)
+                .eq("id", str(deadline_id))
+                .eq("user_id", str(user_id))
+                .select(COLUMNS)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -145,36 +154,40 @@ def _apply_update(deadline_id: UUID, payload: DeadlineUpdate, user_id: UUID) -> 
 
 
 @router.put("/{deadline_id}", response_model=Deadline)
-def update_deadline(
+async def update_deadline(
     deadline_id: UUID,
     payload: DeadlineUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Deadline:
     """Sửa deadline (chỉ field được gửi mới đổi)."""
-    return _apply_update(deadline_id, payload, current.id)
+    return await _apply_update(deadline_id, payload, current.id)
 
 
 @router.patch("/{deadline_id}", response_model=Deadline)
-def patch_deadline(
+async def patch_deadline(
     deadline_id: UUID,
     payload: DeadlineUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Deadline:
     """Alias của PUT cho client thích PATCH từng field."""
-    return _apply_update(deadline_id, payload, current.id)
+    return await _apply_update(deadline_id, payload, current.id)
 
 
 @router.delete("/{deadline_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_deadline(
+async def delete_deadline(
     deadline_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Response:
     """Xóa deadline (204)."""
-    _fetch_one(deadline_id, current.id)
+    await _fetch_one(deadline_id, current.id)
     try:
-        get_supabase_admin().table(TABLE).delete().eq("id", str(deadline_id)).eq(
-            "user_id", str(current.id)
-        ).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).delete().eq("id", str(deadline_id)).eq(
+                    "user_id", str(current.id)
+                ).execute()
+            )
+        )
     except Exception as error:
         _db_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

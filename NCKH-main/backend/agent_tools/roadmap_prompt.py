@@ -21,6 +21,8 @@ Tài liệu chỉ lấy URL nguyên vẹn trong allowed_materials; chọn đúng
 Chỉ có tiêu đề và mô tả tìm kiếm, chưa đọc toàn văn: KHÔNG bịa trang, số bài,
 số ví dụ, đề thi, đáp án hay khẳng định đã kiểm chứng nội dung. Hướng dẫn tìm phần
 liên quan và tự luyện nếu chưa rõ. Không dùng link chỉ vì nó có trong danh sách.
+KHÔNG viết câu kiểu "hãy tìm ... trên mạng" hay "lên Google tìm ...": link thật
+đã cho trong allowed_materials thì gắn vào buổi học, chưa có thì để trống.
 Không có tài liệu phù hợp thì để materials: [], material_url: "" và hướng dẫn
 ôn SGK/tài liệu người học có. Không tự soạn toàn bài học hoặc làm hộ bài thi.
 Mỗi chặng dùng tối đa 3 tài liệu. Mỗi buổi có title (<=80 ký tự), focus (<=280 ký tự)

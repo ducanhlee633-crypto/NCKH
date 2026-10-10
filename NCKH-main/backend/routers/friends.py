@@ -41,6 +41,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from schema import (
     FRIENDSHIP_STATUS_VALUES,
@@ -100,15 +101,17 @@ def _escape_like(value: str) -> str:
 # - Flow: SELECT id,username,nickname FROM profiles WHERE username = lower(input) LIMIT 1
 # - Trả về: dict profile hoặc None nếu không tồn tại.
 # - Dùng ở: mọi endpoint nhận {username} (send/accept/reject/read/delete).
-def _get_profile_by_username(username: str) -> dict | None:
+async def _get_profile_by_username(username: str) -> dict | None:
     try:
-        result = (
-            get_supabase_admin()
-            .table(PROFILE_TABLE)
-            .select(PROFILE_COLUMNS)
-            .eq("username", _clean_username(username))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(PROFILE_TABLE)
+                .select(PROFILE_COLUMNS)
+                .eq("username", _clean_username(username))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -122,16 +125,18 @@ def _get_profile_by_username(username: str) -> dict | None:
 #   thì phải JOIN thủ công: gom tất cả "id người còn lại" rồi query 1 lần
 #   bằng .in_("id", [...]) thay vì query N lần (tránh N+1 query).
 # - Ví dụ: friendships [(me->A),(B->me)] -> cần profile A,B -> {A:..., B:...}
-def _get_profiles_by_ids(user_ids: list[str]) -> dict[str, dict]:
+async def _get_profiles_by_ids(user_ids: list[str]) -> dict[str, dict]:
     if not user_ids:
         return {}
     try:
-        result = (
-            get_supabase_admin()
-            .table(PROFILE_TABLE)
-            .select(PROFILE_COLUMNS)
-            .in_("id", user_ids)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(PROFILE_TABLE)
+                .select(PROFILE_COLUMNS)
+                .in_("id", user_ids)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -161,17 +166,19 @@ def _to_detail(row: dict, friend_row: dict | None) -> FriendshipDetail:
 # - Query: WHERE user_id=A AND friend_id=B LIMIT 1 (bất kể pending/accepted).
 # - Dùng để kiểm tra "me đã gửi cho target chưa" (forward) và
 #   "target đã gửi cho me chưa" (reverse).
-def _find_one_direction(user_id: UUID, friend_id: str) -> dict | None:
+async def _find_one_direction(user_id: UUID, friend_id: str) -> dict | None:
     """Tìm friendship A -> B (đúng chiều), mọi status."""
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("user_id", str(user_id))
-            .eq("friend_id", friend_id)
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("user_id", str(user_id))
+                .eq("friend_id", friend_id)
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -185,24 +192,30 @@ def _find_one_direction(user_id: UUID, friend_id: str) -> dict | None:
 #         nếu không thì thử reverse (other -> me).
 # - Vì mỗi cặp chỉ lưu 1 dòng, nên 1 trong 2 chiều sẽ trúng (nếu có quan hệ).
 # - Dùng ở: GET /friends/{username}, DELETE /friends/{username}.
-def _find_between(me: UUID, other_id: str) -> dict | None:
+async def _find_between(me: UUID, other_id: str) -> dict | None:
     """Tìm friendship giữa 2 user ở cả 2 chiều (forward trước, reverse sau)."""
-    forward = _find_one_direction(me, other_id)
-    if forward:
-        return forward
+    import asyncio
+
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("user_id", other_id)
-            .eq("friend_id", str(me))
-            .limit(1)
-            .execute()
+        forward, reverse_result = await asyncio.gather(
+            _find_one_direction(me, other_id),
+            run_blocking(
+                lambda: (
+                    get_supabase_admin()
+                    .table(TABLE)
+                    .select(COLUMNS)
+                    .eq("user_id", other_id)
+                    .eq("friend_id", str(me))
+                    .limit(1)
+                    .execute()
+                )
+            ),
         )
     except Exception as error:
         _db_error(error)
-    return result.data[0] if result.data else None
+    if forward:
+        return forward
+    return reverse_result.data[0] if reverse_result.data else None
 
 
 # ----------------------------------------------------------------------------
@@ -223,9 +236,9 @@ def _other_id(row: dict, me: UUID) -> str:
 #     B2. Gọi _get_profiles_by_ids 1 lần để lấy map {id: profile}.
 #     B3. Ghép từng row với profile tương ứng thành FriendshipDetail, sort theo username.
 # - Dùng ở: list_requests, list_friends (vì 2 endpoint này trả list).
-def _enrich(rows: list[dict], me: UUID) -> list[FriendshipDetail]:
+async def _enrich(rows: list[dict], me: UUID) -> list[FriendshipDetail]:
     other_ids = list({_other_id(row, me) for row in rows})
-    profiles = _get_profiles_by_ids(other_ids)
+    profiles = await _get_profiles_by_ids(other_ids)
     details = [_to_detail(row, profiles.get(_other_id(row, me))) for row in rows]
     details.sort(key=lambda d: ((d.friend.username or "") if d.friend else "", str(d.friend_id)))
     return details
@@ -236,8 +249,8 @@ def _enrich(rows: list[dict], me: UUID) -> list[FriendshipDetail]:
 # ----------------------------------------------------------------------------
 # - Resolve username -> profile, nếu None thì 404 "User not found".
 # - Giúp các endpoint gọn hơn, không lặp lại if not target.
-def _require_target(username: str) -> dict:
-    target = _get_profile_by_username(username)
+async def _require_target(username: str) -> dict:
+    target = await _get_profile_by_username(username)
     if not target:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return target
@@ -258,7 +271,7 @@ def _require_target(username: str) -> dict:
 #     B5. Map sang FriendProfile trả về.
 # - Ví dụ: me=X search "an" -> [{username:"an",nickname:"An"}, {username:"anna"...}]
 @router.get("/search", response_model=list[FriendProfile])
-def search_by_username(
+async def search_by_username(
     current: SupabaseUser = Depends(get_current_supabase_user),
     q: str = Query(min_length=1, max_length=64, description="Chuỗi username cần tìm (gần đúng)"),
     limit: int = Query(default=20, ge=1, le=50),
@@ -282,7 +295,7 @@ def search_by_username(
             .ilike("username", pattern)
             .limit(limit)
         )
-        result = query.execute()
+        result = await run_blocking(query.execute)
     except Exception as error:
         _db_error(error)
     # B4: loại chính mình + sort A-Z để UI ổn định.
@@ -305,16 +318,16 @@ def search_by_username(
 #     B3. _enrich(rows, me): gắn profile người còn lại + sort.
 # - Ví dụ: A->me pending, me->B pending, direction=all -> trả 2 items kèm friend.
 @router.get("/requests", response_model=list[FriendshipDetail])
-def list_requests(
+async def list_requests(
     current: SupabaseUser = Depends(get_current_supabase_user),
     direction: str = Query(default="incoming", pattern=r"^(incoming|outgoing|all)$"),
 ) -> list[FriendshipDetail]:
     """Liệt kê lời mời kết bạn (pending)."""
-    rows: list[dict] = []
-    try:
-        # B1: lời mời me đã gửi (me là user_id).
-        if direction in ("outgoing", "all"):
-            outgoing = (
+    import asyncio
+
+    async def _outgoing():
+        return await run_blocking(
+            lambda: (
                 get_supabase_admin()
                 .table(TABLE)
                 .select(COLUMNS)
@@ -322,10 +335,11 @@ def list_requests(
                 .eq("status", "pending")
                 .execute()
             )
-            rows.extend(outgoing.data or [])
-        # B2: lời mời me nhận được (me là friend_id).
-        if direction in ("incoming", "all"):
-            incoming = (
+        )
+
+    async def _incoming():
+        return await run_blocking(
+            lambda: (
                 get_supabase_admin()
                 .table(TABLE)
                 .select(COLUMNS)
@@ -333,11 +347,23 @@ def list_requests(
                 .eq("status", "pending")
                 .execute()
             )
+        )
+
+    rows: list[dict] = []
+    try:
+        if direction == "outgoing":
+            rows.extend((await _outgoing()).data or [])
+        elif direction == "incoming":
+            rows.extend((await _incoming()).data or [])
+        else:
+            # all: 2 chiều độc lập -> chạy song song.
+            outgoing, incoming = await asyncio.gather(_outgoing(), _incoming())
+            rows.extend(outgoing.data or [])
             rows.extend(incoming.data or [])
     except Exception as error:
         _db_error(error)
     # B3: gắn username/nickname + sort.
-    return _enrich(rows, current.id)
+    return await _enrich(rows, current.id)
 
 
 # ============================================================================
@@ -358,21 +384,26 @@ def list_requests(
 #     B5. Ghép profile target vào FriendshipDetail trả 201.
 # - Ví dụ chéo: An gửi cho me pending trước, giờ me gửi cho An -> thành bạn ngay.
 @router.post("/requests", response_model=FriendshipDetail, status_code=status.HTTP_201_CREATED)
-def send_request(
+async def send_request(
     payload: FriendshipRequestCreate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> FriendshipDetail:
     """Gửi lời mời kết bạn bằng username (friend_username -> resolve sang friend_id)."""
+    import asyncio
+
     # B1: tìm target + chặn tự kết bạn.
-    target = _require_target(payload.username)
+    target = await _require_target(payload.username)
     target_id = str(target["id"])
     if target_id == str(current.id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot add yourself as a friend.",
         )
-    # B2: me đã gửi / đã là bạn chưa?
-    forward = _find_one_direction(current.id, target_id)
+    # B2 + B3: kiểm tra 2 chiều song song (độc lập).
+    forward, reverse = await asyncio.gather(
+        _find_one_direction(current.id, target_id),
+        _find_one_direction(UUID(target_id), str(current.id)),
+    )
     if forward:
         if forward["status"] == "accepted":
             raise HTTPException(
@@ -381,8 +412,6 @@ def send_request(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Friend request already sent."
         )
-    # B3: target đã gửi cho me chưa? Nếu rồi thì thành bạn luôn.
-    reverse = _find_one_direction(UUID(target_id), str(current.id))
     if reverse:
         if reverse["status"] == "accepted":
             raise HTTPException(
@@ -390,13 +419,15 @@ def send_request(
             )
         # Hai bên cùng gửi lời mời cho nhau -> tự chấp nhận luôn.
         try:
-            updated = (
-                get_supabase_admin()
-                .table(TABLE)
-                .update({"status": "accepted"})
-                .eq("id", str(reverse["id"]))
-                .select(COLUMNS)
-                .execute()
+            updated = await run_blocking(
+                lambda: (
+                    get_supabase_admin()
+                    .table(TABLE)
+                    .update({"status": "accepted"})
+                    .eq("id", str(reverse["id"]))
+                    .select(COLUMNS)
+                    .execute()
+                )
             )
         except Exception as error:
             _db_error(error)
@@ -405,12 +436,14 @@ def send_request(
         return _to_detail(updated.data[0], target)
     # B4: chưa có gì -> tạo mới pending.
     try:
-        created = (
-            get_supabase_admin()
-            .table(TABLE)
-            .insert({"user_id": str(current.id), "friend_id": target_id, "status": "pending"})
-            .select(COLUMNS)
-            .execute()
+        created = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .insert({"user_id": str(current.id), "friend_id": target_id, "status": "pending"})
+                .select(COLUMNS)
+                .execute()
+            )
         )
     except Exception as error:
         message = str(error).lower()
@@ -438,28 +471,30 @@ def send_request(
 #     B4. UPDATE status=accepted WHERE id=row.id, SELECT lại, trả kèm profile.
 # - Ví dụ: An (requester) -> me pending, me gọi POST /accept/an -> accepted.
 @router.post("/accept/{username}", response_model=FriendshipDetail)
-def accept_request(
+async def accept_request(
     username: str,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> FriendshipDetail:
     """Chấp nhận lời mời từ {username} (pending -> accepted)."""
     # B1: ai là người đã gửi cho me?
-    requester = _require_target(username)
+    requester = await _require_target(username)
     # B2: phải có dòng requester -> me đang pending.
-    row = _find_one_direction(UUID(str(requester["id"])), str(current.id))
+    row = await _find_one_direction(UUID(str(requester["id"])), str(current.id))
     if not row or row.get("status") != "pending":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Friend request not found")
     if row["status"] not in FRIENDSHIP_STATUS_VALUES:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid friendship status.")
     try:
         # B4: pending -> accepted.
-        updated = (
-            get_supabase_admin()
-            .table(TABLE)
-            .update({"status": "accepted"})
-            .eq("id", str(row["id"]))
-            .select(COLUMNS)
-            .execute()
+        updated = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .update({"status": "accepted"})
+                .eq("id", str(row["id"]))
+                .select(COLUMNS)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -477,19 +512,23 @@ def accept_request(
 # - Flow giống accept nhưng B4 là DELETE WHERE id (thay vì UPDATE).
 # - Trả 204 No Content (không body).
 @router.post("/reject/{username}", status_code=status.HTTP_204_NO_CONTENT)
-def reject_request(
+async def reject_request(
     username: str,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Response:
     """Từ chối lời mời đến từ {username} (xóa pending)."""
     # B1-B2: giống accept: phải có requester -> me pending.
-    requester = _require_target(username)
-    row = _find_one_direction(UUID(str(requester["id"])), str(current.id))
+    requester = await _require_target(username)
+    row = await _find_one_direction(UUID(str(requester["id"])), str(current.id))
     if not row or row.get("status") != "pending":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Friend request not found")
     try:
         # B3: xóa dòng pending.
-        get_supabase_admin().table(TABLE).delete().eq("id", str(row["id"])).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).delete().eq("id", str(row["id"])).execute()
+            )
+        )
     except Exception as error:
         _db_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -508,31 +547,41 @@ def reject_request(
 #     B3. Khử trùng theo other_id (phòng data cũ có 2 dòng mutual A-B và B-A).
 #     B4. _enrich: gắn profile + sort theo username.
 @router.get("", response_model=list[FriendshipDetail])
-def list_friends(
+async def list_friends(
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> list[FriendshipDetail]:
     """Liệt kê bạn bè đã accepted (cả chiều gửi và chiều nhận)."""
+    import asyncio
+
+    async def _outgoing_accepted():
+        return await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("user_id", str(current.id))
+                .eq("status", "accepted")
+                .execute()
+            )
+        )
+
+    async def _incoming_accepted():
+        return await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("friend_id", str(current.id))
+                .eq("status", "accepted")
+                .execute()
+            )
+        )
+
     rows: list[dict] = []
     try:
-        # B1: bạn mà me là người gửi.
-        outgoing = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("user_id", str(current.id))
-            .eq("status", "accepted")
-            .execute()
-        )
+        # B1 + B2 song song: 2 chiều độc lập.
+        outgoing, incoming = await asyncio.gather(_outgoing_accepted(), _incoming_accepted())
         rows.extend(outgoing.data or [])
-        # B2: bạn mà me là người nhận.
-        incoming = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("friend_id", str(current.id))
-            .eq("status", "accepted")
-            .execute()
-        )
         rows.extend(incoming.data or [])
     except Exception as error:
         _db_error(error)
@@ -543,7 +592,7 @@ def list_friends(
         if key not in seen:
             seen[key] = row
     # B4: gắn profile + sort.
-    return _enrich(list(seen.values()), current.id)
+    return await _enrich(list(seen.values()), current.id)
 
 
 # ============================================================================
@@ -556,13 +605,13 @@ def list_friends(
 # - Lưu ý thứ tự route: /search và /requests phải khai báo TRƯỚC /{username},
 #   nếu không FastAPI sẽ nhầm "search" thành username.
 @router.get("/{username}", response_model=FriendshipDetail)
-def read_friendship(
+async def read_friendship(
     username: str,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> FriendshipDetail:
     """Đọc 1 quan hệ bạn bè với {username} (pending hoặc accepted)."""
-    target = _require_target(username)
-    row = _find_between(current.id, str(target["id"]))
+    target = await _require_target(username)
+    row = await _find_between(current.id, str(target["id"]))
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Friendship not found")
     return _to_detail(row, target)
@@ -580,17 +629,21 @@ def read_friendship(
 # - Khác endpoint 5: endpoint 5 chỉ xóa pending chiều đến,
 #   endpoint này xóa bất kỳ status/chiều nào.
 @router.delete("/{username}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_friendship(
+async def delete_friendship(
     username: str,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Response:
     """Xóa bạn / hủy lời mời đã gửi / từ chối lời mời đến — xóa theo username."""
-    target = _require_target(username)
-    row = _find_between(current.id, str(target["id"]))
+    target = await _require_target(username)
+    row = await _find_between(current.id, str(target["id"]))
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Friendship not found")
     try:
-        get_supabase_admin().table(TABLE).delete().eq("id", str(row["id"])).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).delete().eq("id", str(row["id"])).execute()
+            )
+        )
     except Exception as error:
         _db_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

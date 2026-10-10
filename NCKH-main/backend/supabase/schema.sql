@@ -1190,3 +1190,70 @@ create policy "daily_tasks_delete_own"
   on public.daily_tasks for delete
   to authenticated
   using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------
+-- 17. Bảng ai_memories: trí nhớ dài hạn cho AI (Settings "Quản lí trí nhớ AI").
+--     Mỗi dòng 1 mẩu user tự lưu để AI hiểu ngữ cảnh (biết user là ai):
+--       tag     : 'info' (Thông tin cá nhân) | 'hobby' (Sở thích)
+--               | 'study' (Học tập) | 'goal' (Mục tiêu)
+--               | 'habit' (Thói quen) | 'note' (Ghi chú khác)
+--       content : nội dung mẩu nhớ (1..500 ký tự)
+--     Tối đa 50 dòng/user (chặn ở router, không chặn ở DB để migrate an toàn).
+--     POST /api/ai/chat ĐỌC TRƯỚC bảng này mỗi lượt chat:
+--       ưu tiên lọc theo tag (dùng index bên dưới), fallback đọc mới nhất.
+--     Chỉ CRUD thủ công trong Settings — AI không tự ghi.
+--     Cách chạy: dán toàn bộ file vào SQL Editor > Run (chạy lại an toàn).
+-- ---------------------------------------------------------------------
+create table if not exists public.ai_memories (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  tag text not null default 'note',
+  content text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint ai_memories_tag_check check (tag in ('info', 'hobby', 'study', 'goal', 'habit', 'note')),
+  constraint ai_memories_content_length check (char_length(content) between 1 and 500)
+);
+
+create index if not exists ai_memories_user_id_idx
+  on public.ai_memories (user_id);
+
+-- Index ưu tiên cho chiến lược "đọc theo tag liên quan" của POST /ai/chat:
+-- query .eq("user_id").eq("tag") dùng index này thay vì full scan.
+create index if not exists ai_memories_user_tag_idx
+  on public.ai_memories (user_id, tag);
+
+create index if not exists ai_memories_user_updated_idx
+  on public.ai_memories (user_id, updated_at desc);
+
+drop trigger if exists ai_memories_updated_at on public.ai_memories;
+create trigger ai_memories_updated_at
+before update on public.ai_memories
+for each row execute function public.set_profile_updated_at();
+
+alter table public.ai_memories enable row level security;
+
+drop policy if exists "ai_memories_select_own" on public.ai_memories;
+create policy "ai_memories_select_own"
+  on public.ai_memories for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "ai_memories_insert_own" on public.ai_memories;
+create policy "ai_memories_insert_own"
+  on public.ai_memories for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "ai_memories_update_own" on public.ai_memories;
+create policy "ai_memories_update_own"
+  on public.ai_memories for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "ai_memories_delete_own" on public.ai_memories;
+create policy "ai_memories_delete_own"
+  on public.ai_memories for delete
+  to authenticated
+  using (auth.uid() = user_id);

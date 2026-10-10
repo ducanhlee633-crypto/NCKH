@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from schema import REPEAT_VALUES, ScheduleBlock, ScheduleBlockCreate, ScheduleBlockUpdate
 from supabase_client import get_supabase_admin
@@ -89,16 +90,18 @@ def _validate_rule(
     return until
 
 
-def _fetch_one(block_id: UUID, user_id: UUID) -> dict:
+async def _fetch_one(block_id: UUID, user_id: UUID) -> dict:
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("id", str(block_id))
-            .eq("user_id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("id", str(block_id))
+                .eq("user_id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -118,7 +121,7 @@ def _overlaps(row: dict, from_day: va_date | None, to_day: va_date | None) -> bo
 
 
 @router.get("", response_model=list[ScheduleBlock])
-def list_blocks(
+async def list_blocks(
     current: SupabaseUser = Depends(get_current_supabase_user),
     from_day: va_date | None = Query(default=None, alias="from"),
     to_day: va_date | None = Query(default=None, alias="to"),
@@ -130,12 +133,14 @@ def list_blocks(
             detail="Ngày 'from' phải trước hoặc bằng ngày 'to'.",
         )
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("user_id", str(current.id))
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("user_id", str(current.id))
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -145,7 +150,7 @@ def list_blocks(
 
 
 @router.post("", response_model=ScheduleBlock, status_code=status.HTTP_201_CREATED)
-def create_block(
+async def create_block(
     payload: ScheduleBlockCreate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> ScheduleBlock:
@@ -162,8 +167,10 @@ def create_block(
     values["user_id"] = str(current.id)
     values["repeat_until"] = until.isoformat() if until else None
     try:
-        result = (
-            get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -173,16 +180,16 @@ def create_block(
 
 
 @router.get("/{block_id}", response_model=ScheduleBlock)
-def read_block(
+async def read_block(
     block_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> ScheduleBlock:
     """Đọc 1 block của chính mình."""
-    return _to_block(_fetch_one(block_id, current.id))
+    return _to_block(await _fetch_one(block_id, current.id))
 
 
 @router.put("/{block_id}", response_model=ScheduleBlock)
-def update_block(
+async def update_block(
     block_id: UUID,
     payload: ScheduleBlockUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
@@ -191,7 +198,7 @@ def update_block(
 ) -> ScheduleBlock:
     """Sửa block. scope=series: sửa cả chuỗi; scope=single&day=...: chỉ sửa 1 buổi
     (tách buổi đó thành block lẻ, buổi gốc được đưa vào exdates)."""
-    row = _fetch_one(block_id, current.id)
+    row = await _fetch_one(block_id, current.id)
     current_block = _to_block(row)
 
     if scope == "single" and current_block.repeat != "none":
@@ -200,7 +207,7 @@ def update_block(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Thiếu query param 'day' (ngày của buổi cần sửa).",
             )
-        return _update_single(current_block, day, payload, current.id)
+        return await _update_single(current_block, day, payload, current.id)
 
     values = payload.model_dump(exclude_unset=True, mode="json")
     if not values:
@@ -218,14 +225,16 @@ def update_block(
     if str(merged["repeat"]) == "none":
         values["repeat_days"] = []
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .update(values)
-            .eq("id", str(block_id))
-            .eq("user_id", str(current.id))
-            .select(COLUMNS)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .update(values)
+                .eq("id", str(block_id))
+                .eq("user_id", str(current.id))
+                .select(COLUMNS)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -234,7 +243,7 @@ def update_block(
     return _to_block(result.data[0])
 
 
-def _update_single(
+async def _update_single(
     parent: ScheduleBlock, day: va_date, payload: ScheduleBlockUpdate, user_id: UUID
 ) -> ScheduleBlock:
     """Tách 1 buổi lẻ ra khỏi chuỗi: parent thêm exdates, tạo block lẻ mới."""
@@ -276,13 +285,19 @@ def _update_single(
         repeat_until=None,
     )
     try:
-        created = (
-            get_supabase_admin().table(TABLE).insert(child_values).select(COLUMNS).execute()
+        created = await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).insert(child_values).select(COLUMNS).execute()
+            )
         )
         exdates = sorted({*(parent.exdates or []), day}, key=str)
-        get_supabase_admin().table(TABLE).update(
-            {"exdates": [d.isoformat() if isinstance(d, va_date) else str(d) for d in exdates]}
-        ).eq("id", str(parent.id)).eq("user_id", str(user_id)).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).update(
+                    {"exdates": [d.isoformat() if isinstance(d, va_date) else str(d) for d in exdates]}
+                ).eq("id", str(parent.id)).eq("user_id", str(user_id)).execute()
+            )
+        )
     except HTTPException:
         raise
     except Exception as error:
@@ -293,7 +308,7 @@ def _update_single(
 
 
 @router.delete("/{block_id}", response_model=ScheduleBlock | None)
-def delete_block(
+async def delete_block(
     block_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
     scope: str = Query(default="series", pattern=r"^(series|single)$"),
@@ -301,7 +316,7 @@ def delete_block(
 ) -> ScheduleBlock | Response | None:
     """Xóa block. scope=series: xóa cả chuỗi (204); scope=single&day=...: chỉ bỏ
     1 buổi — thêm ngày đó vào exdates, giữ nguyên chuỗi (200 + chuỗi đã cập nhật)."""
-    row = _fetch_one(block_id, current.id)
+    row = await _fetch_one(block_id, current.id)
     block = _to_block(row)
 
     if scope == "single" and block.repeat != "none":
@@ -320,16 +335,18 @@ def delete_block(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule block not found")
         exdates = sorted({*(block.exdates or []), day}, key=str)
         try:
-            result = (
-                get_supabase_admin()
-                .table(TABLE)
-                .update(
-                    {"exdates": [d.isoformat() if isinstance(d, va_date) else str(d) for d in exdates]}
+            result = await run_blocking(
+                lambda: (
+                    get_supabase_admin()
+                    .table(TABLE)
+                    .update(
+                        {"exdates": [d.isoformat() if isinstance(d, va_date) else str(d) for d in exdates]}
+                    )
+                    .eq("id", str(block_id))
+                    .eq("user_id", str(current.id))
+                    .select(COLUMNS)
+                    .execute()
                 )
-                .eq("id", str(block_id))
-                .eq("user_id", str(current.id))
-                .select(COLUMNS)
-                .execute()
             )
         except Exception as error:
             _db_error(error)
@@ -338,9 +355,13 @@ def delete_block(
         return _to_block(result.data[0])
 
     try:
-        get_supabase_admin().table(TABLE).delete().eq("id", str(block_id)).eq(
-            "user_id", str(current.id)
-        ).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).delete().eq("id", str(block_id)).eq(
+                    "user_id", str(current.id)
+                ).execute()
+            )
+        )
     except Exception as error:
         _db_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

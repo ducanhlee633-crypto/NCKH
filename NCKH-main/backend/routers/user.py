@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user, unauthorized
 from config import get_settings
 from schema import (
@@ -83,28 +84,32 @@ def _supabase_error_status(error: Exception) -> tuple[int, str]:
     return status.HTTP_400_BAD_REQUEST, "Không thể hoàn tất yêu cầu."
 
 
-def _fetch_profile(user_id: UUID) -> dict | None:
+async def _fetch_profile(user_id: UUID) -> dict | None:
     try:
-        result = (
-            get_supabase_admin()
-            .table(PROFILES_TABLE)
-            .select(PROFILE_COLUMNS)
-            .eq("id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(PROFILES_TABLE)
+                .select(PROFILE_COLUMNS)
+                .eq("id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         # DB cũ chưa có cột grade (chưa chạy migration): fallback đọc cột cũ.
         message = str(error).lower()
         if "grade" in message and ("column" in message or "schema" in message or "42703" in message):
             try:
-                result = (
-                    get_supabase_admin()
-                    .table(PROFILES_TABLE)
-                    .select(PROFILE_COLUMNS_LEGACY)
-                    .eq("id", str(user_id))
-                    .limit(1)
-                    .execute()
+                result = await run_blocking(
+                    lambda: (
+                        get_supabase_admin()
+                        .table(PROFILES_TABLE)
+                        .select(PROFILE_COLUMNS_LEGACY)
+                        .eq("id", str(user_id))
+                        .limit(1)
+                        .execute()
+                    )
                 )
             except Exception as legacy_error:
                 _raise_database_error(legacy_error)
@@ -116,7 +121,7 @@ def _fetch_profile(user_id: UUID) -> dict | None:
     return row
 
 
-def _ensure_profile(
+async def _ensure_profile(
     user_id: UUID,
     username: str | None,
     name: str,
@@ -124,7 +129,7 @@ def _ensure_profile(
     grade: str | None = None,
 ) -> dict:
     """Lấy profile theo auth id; tự tạo nếu trigger handle_new_user chưa kịp chạy."""
-    existing = _fetch_profile(user_id)
+    existing = await _fetch_profile(user_id)
     if existing:
         return existing
     values: dict = {"id": str(user_id), "name": (name or "").strip()}
@@ -136,21 +141,27 @@ def _ensure_profile(
         values["grade"] = _clean_grade(grade)
     try:
         try:
-            result = get_supabase_admin().table(PROFILES_TABLE).insert(values).select(PROFILE_COLUMNS).execute()
+            result = await run_blocking(
+                lambda: (
+                    get_supabase_admin().table(PROFILES_TABLE).insert(values).select(PROFILE_COLUMNS).execute()
+                )
+            )
         except Exception as insert_error:
             # DB cũ chưa có cột grade: thử lại không kèm grade.
             message = str(insert_error).lower()
             if "grade" in message and "grade" in values:
                 values.pop("grade", None)
-                result = (
-                    get_supabase_admin().table(PROFILES_TABLE).insert(values).select(PROFILE_COLUMNS_LEGACY).execute()
+                result = await run_blocking(
+                    lambda: (
+                        get_supabase_admin().table(PROFILES_TABLE).insert(values).select(PROFILE_COLUMNS_LEGACY).execute()
+                    )
                 )
             else:
                 raise
         return _one(result.data)
     except Exception as error:
         # Có thể trigger đã tạo song song -> đọc lại lần nữa trước khi báo lỗi.
-        retry = _fetch_profile(user_id)
+        retry = await _fetch_profile(user_id)
         if retry:
             return retry
         _raise_database_error(error)
@@ -171,11 +182,11 @@ def _to_public(row: dict) -> UserPublic:
     return UserPublic.model_validate(row)
 
 
-def get_current_profile(current: SupabaseUser = Depends(get_current_supabase_user)) -> UserPrivate:
-    row = _fetch_profile(current.id)
+async def get_current_profile(current: SupabaseUser = Depends(get_current_supabase_user)) -> UserPrivate:
+    row = await _fetch_profile(current.id)
     if not row:
         # Tài khoản Auth tồn tại nhưng chưa có profile (VD: tắt trigger) -> tạo placeholder.
-        row = _ensure_profile(current.id, None, "")
+        row = await _ensure_profile(current.id, None, "")
     return _to_private(row, current.email)
 
 
@@ -213,7 +224,7 @@ def _email_confirm_redirect() -> str | None:
 
 
 @auth_router.post("/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
-def signup(payload: SignupRequest) -> Token:
+async def signup(payload: SignupRequest) -> Token:
     username = _clean_username(payload.username) if payload.username else None
     nickname = _clean_nickname(payload.nickname) if payload.nickname else None
     grade = _clean_grade(payload.grade) if payload.grade else None
@@ -231,12 +242,13 @@ def signup(payload: SignupRequest) -> Token:
     if confirm_redirect:
         signup_options["email_redirect_to"] = confirm_redirect
     try:
-        response = get_supabase_anon().auth.sign_up(
+        response = await run_blocking(
+            get_supabase_anon().auth.sign_up,
             {
                 "email": payload.email.strip(),
                 "password": payload.password,
                 "options": signup_options,
-            }
+            },
         )
     except HTTPException:
         raise
@@ -252,15 +264,16 @@ def signup(payload: SignupRequest) -> Token:
             status_code=status.HTTP_201_CREATED,
             detail="Tạo tài khoản thành công. Vui lòng kiểm tra email để xác nhận trước khi đăng nhập.",
         )
-    profile = _ensure_profile(UUID(str(response.user.id)), username, payload.name or "", nickname, grade)
+    profile = await _ensure_profile(UUID(str(response.user.id)), username, payload.name or "", nickname, grade)
     return _to_token(response.session, profile)
 
 
 @auth_router.post("/login", response_model=Token)
-def login(payload: LoginRequest) -> Token:
+async def login(payload: LoginRequest) -> Token:
     try:
-        response = get_supabase_anon().auth.sign_in_with_password(
-            {"email": payload.email.strip(), "password": payload.password}
+        response = await run_blocking(
+            get_supabase_anon().auth.sign_in_with_password,
+            {"email": payload.email.strip(), "password": payload.password},
         )
     except HTTPException:
         raise
@@ -270,33 +283,37 @@ def login(payload: LoginRequest) -> Token:
         raise HTTPException(status_code=code, detail=detail) from error
     if not response.session or not response.user:
         raise unauthorized("Email hoặc mật khẩu không đúng.")
-    profile = _ensure_profile(UUID(str(response.user.id)), None, "")
+    profile = await _ensure_profile(UUID(str(response.user.id)), None, "")
     return _to_token(response.session, profile)
 
 
 @auth_router.post("/refresh", response_model=Token)
-def refresh(payload: RefreshRequest) -> Token:
+async def refresh(payload: RefreshRequest) -> Token:
     try:
-        response = get_supabase_anon().auth.refresh_session(payload.refresh_token)
+        response = await run_blocking(
+            get_supabase_anon().auth.refresh_session, payload.refresh_token
+        )
     except HTTPException:
         raise
     except Exception as error:
         raise unauthorized("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.") from error
     if not response.session or not response.user:
         raise unauthorized("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.")
-    profile = _fetch_profile(UUID(str(response.user.id)))
+    profile = await _fetch_profile(UUID(str(response.user.id)))
     return _to_token(response.session, profile)
 
 
 @auth_router.post("/callback", response_model=Token)
-def exchange_confirmation_code(payload: VerifyCallbackRequest) -> Token:
+async def exchange_confirmation_code(payload: VerifyCallbackRequest) -> Token:
     """Đổi `code` trong link xác nhận email (luồng PKCE) lấy session.
 
     Frontend gọi endpoint này khi Supabase đáp về `/?code=...` sau khi user bấm
     link xác nhận trong mail. Có session -> App tự đẩy tiếp vào onboarding.
     """
     try:
-        response = get_supabase_anon().auth.exchange_code_for_session({"auth_code": payload.code})
+        response = await run_blocking(
+            get_supabase_anon().auth.exchange_code_for_session, {"auth_code": payload.code}
+        )
     except HTTPException:
         raise
     except Exception as error:
@@ -312,12 +329,12 @@ def exchange_confirmation_code(payload: VerifyCallbackRequest) -> Token:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Liên kết xác nhận không hợp lệ hoặc đã hết hạn.",
         )
-    profile = _ensure_profile(UUID(str(response.user.id)), None, "")
+    profile = await _ensure_profile(UUID(str(response.user.id)), None, "")
     return _to_token(response.session, profile)
 
 
 @auth_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(current: SupabaseUser = Depends(get_current_supabase_user)) -> None:
+async def logout(current: SupabaseUser = Depends(get_current_supabase_user)) -> None:
     # Supabase Auth là stateless JWT: client tự xóa session.
     # Backend chỉ xác thực token hợp lệ (qua Depends) rồi trả 204.
     # Nếu muốn revoke refresh token, gọi thêm admin API ở đây.
@@ -325,13 +342,13 @@ def logout(current: SupabaseUser = Depends(get_current_supabase_user)) -> None:
 
 
 @auth_router.post("/reset-password", status_code=status.HTTP_202_ACCEPTED)
-def reset_password(payload: ResetPasswordRequest) -> dict:
+async def reset_password(payload: ResetPasswordRequest) -> dict:
     """Gửi mail đặt lại mật khẩu qua Supabase Auth. Luôn trả 202 để tránh dò email."""
     try:
         reset_fn = getattr(get_supabase_anon().auth, "reset_password_email", None)
         if reset_fn is None:
             raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Chưa hỗ trợ đặt lại mật khẩu.")
-        reset_fn(payload.email.strip())
+        await run_blocking(reset_fn, payload.email.strip())
     except HTTPException:
         raise
     except Exception:
@@ -341,10 +358,14 @@ def reset_password(payload: ResetPasswordRequest) -> dict:
 
 
 @auth_router.patch("/password", status_code=status.HTTP_204_NO_CONTENT)
-def change_password(payload: PasswordChange, current: SupabaseUser = Depends(get_current_supabase_user)) -> None:
+async def change_password(payload: PasswordChange, current: SupabaseUser = Depends(get_current_supabase_user)) -> None:
     """Đổi mật khẩu của chính mình (cần access_token còn hiệu lực)."""
     try:
-        get_supabase_admin().auth.admin.update_user_by_id(str(current.id), {"password": payload.new_password})
+        await run_blocking(
+            get_supabase_admin().auth.admin.update_user_by_id,
+            str(current.id),
+            {"password": payload.new_password},
+        )
     except HTTPException:
         raise
     except Exception as error:
@@ -352,7 +373,7 @@ def change_password(payload: PasswordChange, current: SupabaseUser = Depends(get
 
 
 @auth_router.get("/me", response_model=UserPrivate)
-def get_me(profile: UserPrivate = Depends(get_current_profile)) -> UserPrivate:
+async def get_me(profile: UserPrivate = Depends(get_current_profile)) -> UserPrivate:
     return profile
 
 
@@ -360,12 +381,12 @@ def get_me(profile: UserPrivate = Depends(get_current_profile)) -> UserPrivate:
 
 
 @router.get("/me", response_model=UserPrivate)
-def read_own_profile(profile: UserPrivate = Depends(get_current_profile)) -> UserPrivate:
+async def read_own_profile(profile: UserPrivate = Depends(get_current_profile)) -> UserPrivate:
     return profile
 
 
 @router.patch("/me", response_model=UserPrivate)
-def update_own_profile(
+async def update_own_profile(
     payload: ProfileUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> UserPrivate:
@@ -386,19 +407,21 @@ def update_own_profile(
                 detail="Lớp không hợp lệ. Chọn từ 6 đến 12.",
             ) from error
     if not values:
-        row = _fetch_profile(current.id)
+        row = await _fetch_profile(current.id)
         if not row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
         return _to_private(row, current.email)
     try:
         try:
-            result = (
-                get_supabase_admin()
-                .table(PROFILES_TABLE)
-                .update(values)
-                .eq("id", str(current.id))
-                .select(PROFILE_COLUMNS)
-                .execute()
+            result = await run_blocking(
+                lambda: (
+                    get_supabase_admin()
+                    .table(PROFILES_TABLE)
+                    .update(values)
+                    .eq("id", str(current.id))
+                    .select(PROFILE_COLUMNS)
+                    .execute()
+                )
             )
         except Exception as update_error:
             # DB cũ chưa chạy migration thêm cột grade: Supabase báo
@@ -416,13 +439,15 @@ def update_own_profile(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="Chưa có cột grade trong bảng profiles. Hãy chạy migration trong backend/supabase/schema.sql rồi thử lại.",
                 ) from update_error
-            result = (
-                get_supabase_admin()
-                .table(PROFILES_TABLE)
-                .update(values)
-                .eq("id", str(current.id))
-                .select(PROFILE_COLUMNS_LEGACY)
-                .execute()
+            result = await run_blocking(
+                lambda: (
+                    get_supabase_admin()
+                    .table(PROFILES_TABLE)
+                    .update(values)
+                    .eq("id", str(current.id))
+                    .select(PROFILE_COLUMNS_LEGACY)
+                    .execute()
+                )
             )
         row = _one(result.data)
         return _to_private(row, current.email)
@@ -433,15 +458,19 @@ def update_own_profile(
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
-def delete_own_account(current: SupabaseUser = Depends(get_current_supabase_user)) -> None:
+async def delete_own_account(current: SupabaseUser = Depends(get_current_supabase_user)) -> None:
     """Xóa profile + xóa auth user (xóa tài khoản). Cần xác thực lại bằng access_token còn hiệu lực."""
     settings = get_settings()
     _ = settings  # giữ tham chiếu cấu hình cho mở rộng (VD: cấm tự xóa với role admin sau này)
     try:
-        get_supabase_admin().table(PROFILES_TABLE).delete().eq("id", str(current.id)).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(PROFILES_TABLE).delete().eq("id", str(current.id)).execute()
+            )
+        )
     except Exception as error:
         _raise_database_error(error)
     try:
-        get_supabase_admin().auth.admin.delete_user(str(current.id))
+        await run_blocking(get_supabase_admin().auth.admin.delete_user, str(current.id))
     except Exception as error:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Không xóa được tài khoản.") from error

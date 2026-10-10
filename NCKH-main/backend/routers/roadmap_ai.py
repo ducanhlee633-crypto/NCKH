@@ -1,4 +1,5 @@
 """Generate validated learning plans; long plans are expanded one stage at a time."""
+import asyncio
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -12,6 +13,7 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from agent_tools.roadmap_prompt import MAX_SESSIONS, ROADMAP_SYSTEM_PROMPT, build_roadmap_user_prompt
 from agent_tools.web_search import search_documents
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from config import get_settings
 
@@ -219,12 +221,15 @@ def _request_json(client, model, prompt, tokens, validate, deadline):
 
 
 @router.post("/roadmap", response_model=RoadmapResponse)
-def generate_roadmap(payload: RoadmapRequest, current: SupabaseUser = Depends(get_current_supabase_user)):
+async def generate_roadmap(payload: RoadmapRequest, current: SupabaseUser = Depends(get_current_supabase_user)):
     settings = get_settings()
     if not (settings.openrouter_api_key or "").strip():
         raise HTTPException(503, "Dịch vụ AI chưa được cấu hình.")
     deadline = monotonic() + 180
-    materials, search_used = _collect_materials(payload.subject, payload.context, payload.learner_profile)
+    # Search 3 query song song trong threadpool (giữ nguyên helper sync để test mock được).
+    materials, search_used = await run_blocking(
+        _collect_materials, payload.subject, payload.context, payload.learner_profile
+    )
     allowed_urls = {m["url"] for m in materials}
     total = payload.total_sessions
     prompt = build_roadmap_user_prompt(
@@ -249,8 +254,10 @@ def generate_roadmap(payload: RoadmapRequest, current: SupabaseUser = Depends(ge
                     timeout=60.0, max_retries=0, default_headers=headers)
     try:
         if total <= 16:
-            stages = _request_json(client, model, prompt, 1800 + total * 350,
-                                   lambda data: _normalize_plan(data.get("stages"), allowed_urls, total), deadline)
+            stages = await run_blocking(
+                _request_json, client, model, prompt, 1800 + total * 350,
+                lambda data: _normalize_plan(data.get("stages"), allowed_urls, total), deadline,
+            )
         else:
             def validate_outline(data):
                 raw = data.get("stages")
@@ -263,7 +270,10 @@ def generate_roadmap(payload: RoadmapRequest, current: SupabaseUser = Depends(ge
                 checked = _normalize_plan([{**s, "lessons": [{"title": f"Buổi {i}", "focus": "outline"}]} for i, s in enumerate(raw)], allowed_urls, len(raw))
                 return [{**s, "lessons": [], "session_count": n} for s, n in zip(checked, counts)]
 
-            outline = _request_json(client, model, prompt + '\n{"mode":"outline"}', 3500, validate_outline, deadline)
+            outline = await run_blocking(
+                _request_json, client, model, prompt + '\n{"mode":"outline"}', 3500, validate_outline, deadline,
+            )
+
             def expand(index):
                 stage = outline[index]
                 count = stage["session_count"]
@@ -273,8 +283,12 @@ def generate_roadmap(payload: RoadmapRequest, current: SupabaseUser = Depends(ge
                 return _request_json(client, model, stage_prompt, 1000 + count * 350,
                     lambda data: _normalize_plan([{**stage, "lessons": data.get("lessons")}], allowed_urls, count)[0], deadline)
 
-            with ThreadPoolExecutor(max_workers=4) as executor:
-                stages = list(executor.map(expand, range(len(outline))))
+            # Mỗi chặng expand độc lập (gọi LLM riêng) -> chạy song song qua threadpool,
+            # giữ đúng thứ tự chặng như ThreadPoolExecutor.map trước đây.
+            async def _expand_one(index: int):
+                return await run_blocking(expand, index)
+
+            stages = list(await asyncio.gather(*[_expand_one(i) for i in range(len(outline))]))
             try:
                 stages = _normalize_plan(stages, allowed_urls, total)
             except ValueError as error:

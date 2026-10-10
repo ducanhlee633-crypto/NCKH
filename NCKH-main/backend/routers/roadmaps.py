@@ -13,6 +13,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from schema import (
     ROADMAP_MAX_LESSONS,
@@ -164,16 +165,18 @@ def _to_roadmap(row: dict, stages: list[dict] | None = None, lessons: list[dict]
     )
 
 
-def _fetch_roadmap_row(roadmap_id: UUID, user_id: UUID) -> dict:
+async def _fetch_roadmap_row(roadmap_id: UUID, user_id: UUID) -> dict:
     try:
-        result = (
-            get_supabase_admin()
-            .table(ROADMAP_TABLE)
-            .select(ROADMAP_COLUMNS)
-            .eq("id", str(roadmap_id))
-            .eq("user_id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(ROADMAP_TABLE)
+                .select(ROADMAP_COLUMNS)
+                .eq("id", str(roadmap_id))
+                .eq("user_id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -182,32 +185,44 @@ def _fetch_roadmap_row(roadmap_id: UUID, user_id: UUID) -> dict:
     return result.data[0]
 
 
-def _fetch_nested(roadmap_id: UUID, user_id: UUID) -> tuple[list[dict], list[dict]]:
+async def _fetch_nested(roadmap_id: UUID, user_id: UUID) -> tuple[list[dict], list[dict]]:
+    """Lấy stages + lessons song song (2 query độc lập)."""
+    import asyncio
+
+    async def _stages():
+        return await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(STAGE_TABLE)
+                .select(STAGE_COLUMNS)
+                .eq("roadmap_id", str(roadmap_id))
+                .eq("user_id", str(user_id))
+                .execute()
+            )
+        )
+
+    async def _lessons():
+        return await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(LESSON_TABLE)
+                .select(LESSON_COLUMNS)
+                .eq("roadmap_id", str(roadmap_id))
+                .eq("user_id", str(user_id))
+                .execute()
+            )
+        )
+
     try:
-        stages = (
-            get_supabase_admin()
-            .table(STAGE_TABLE)
-            .select(STAGE_COLUMNS)
-            .eq("roadmap_id", str(roadmap_id))
-            .eq("user_id", str(user_id))
-            .execute()
-        )
-        lessons = (
-            get_supabase_admin()
-            .table(LESSON_TABLE)
-            .select(LESSON_COLUMNS)
-            .eq("roadmap_id", str(roadmap_id))
-            .eq("user_id", str(user_id))
-            .execute()
-        )
+        stages, lessons = await asyncio.gather(_stages(), _lessons())
     except Exception as error:
         _db_error(error)
     return list(stages.data or []), list(lessons.data or [])
 
 
-def _fetch_detail(roadmap_id: UUID, user_id: UUID) -> RoadmapDetail:
-    row = _fetch_roadmap_row(roadmap_id, user_id)
-    stages, lessons = _fetch_nested(roadmap_id, user_id)
+async def _fetch_detail(roadmap_id: UUID, user_id: UUID) -> RoadmapDetail:
+    row = await _fetch_roadmap_row(roadmap_id, user_id)
+    stages, lessons = await _fetch_nested(roadmap_id, user_id)
     return _to_roadmap(row, stages, lessons)
 
 
@@ -248,7 +263,7 @@ def _validate_create(payload: RoadmapCreate) -> None:
                 )
 
 
-def _insert_nested(
+async def _insert_nested(
     roadmap_id: str, user_id: str, stages: list[RoadmapStageCreate], lessons: list[RoadmapLessonCreate]
 ) -> tuple[list[dict], list[dict]]:
     stage_rows: list[dict] = []
@@ -263,8 +278,10 @@ def _insert_nested(
                 for m in (values.get("materials") or [])
                 if _safe_url((m or {}).get("url"))
             ][:3]
-            created = (
-                get_supabase_admin().table(STAGE_TABLE).insert(values).select(STAGE_COLUMNS).execute()
+            created = await run_blocking(
+                lambda v=values: (
+                    get_supabase_admin().table(STAGE_TABLE).insert(v).select(STAGE_COLUMNS).execute()
+                )
             )
             if created.data:
                 stage_rows.extend(created.data)
@@ -280,8 +297,10 @@ def _insert_nested(
             values["material_url"] = _safe_url(values.get("material_url"))
             if values["material_url"] and not values.get("material_label"):
                 values["material_label"] = values["material_url"][:200]
-            created = (
-                get_supabase_admin().table(LESSON_TABLE).insert(values).select(LESSON_COLUMNS).execute()
+            created = await run_blocking(
+                lambda v=values: (
+                    get_supabase_admin().table(LESSON_TABLE).insert(v).select(LESSON_COLUMNS).execute()
+                )
             )
             if created.data:
                 lesson_rows.extend(created.data)
@@ -290,20 +309,28 @@ def _insert_nested(
     return stage_rows, lesson_rows
 
 
-def _replace_nested(
+async def _replace_nested(
     roadmap_id: UUID, user_id: UUID, stages: list[RoadmapStageCreate] | None, lessons: list[RoadmapLessonCreate] | None
 ) -> None:
     # Thay toàn bộ nested khi PUT/PATCH gửi kèm: xóa cũ rồi chèn mới
     # (lessons trước để tránh vướng FK stage_id, stages sau đó).
     try:
         if lessons is not None:
-            get_supabase_admin().table(LESSON_TABLE).delete().eq("roadmap_id", str(roadmap_id)).eq(
-                "user_id", str(user_id)
-            ).execute()
+            await run_blocking(
+                lambda: (
+                    get_supabase_admin().table(LESSON_TABLE).delete().eq("roadmap_id", str(roadmap_id)).eq(
+                        "user_id", str(user_id)
+                    ).execute()
+                )
+            )
         if stages is not None:
-            get_supabase_admin().table(STAGE_TABLE).delete().eq("roadmap_id", str(roadmap_id)).eq(
-                "user_id", str(user_id)
-            ).execute()
+            await run_blocking(
+                lambda: (
+                    get_supabase_admin().table(STAGE_TABLE).delete().eq("roadmap_id", str(roadmap_id)).eq(
+                        "user_id", str(user_id)
+                    ).execute()
+                )
+            )
     except Exception as error:
         _db_error(error)
     next_stages = stages if stages is not None else []
@@ -311,33 +338,37 @@ def _replace_nested(
     if next_stages or next_lessons:
         for lesson in next_lessons:
             _check_lesson_times(str(lesson.start_time)[:5], str(lesson.end_time)[:5])
-        _insert_nested(str(roadmap_id), str(user_id), next_stages, next_lessons)
+        await _insert_nested(str(roadmap_id), str(user_id), next_stages, next_lessons)
 
 
 @router.get("", response_model=list[RoadmapDetail])
-def list_roadmaps(current: SupabaseUser = Depends(get_current_supabase_user)) -> list[RoadmapDetail]:
+async def list_roadmaps(current: SupabaseUser = Depends(get_current_supabase_user)) -> list[RoadmapDetail]:
     """Liệt kê lộ trình của chính mình kèm stages + lessons (mới nhất trước)."""
+    import asyncio
+
     try:
-        result = (
-            get_supabase_admin()
-            .table(ROADMAP_TABLE)
-            .select(ROADMAP_COLUMNS)
-            .eq("user_id", str(current.id))
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(ROADMAP_TABLE)
+                .select(ROADMAP_COLUMNS)
+                .eq("user_id", str(current.id))
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
     rows = list(result.data or [])
     rows.sort(key=lambda r: (str(r.get("created_at") or ""), str(r.get("id"))), reverse=True)
-    details: list[RoadmapDetail] = []
-    for row in rows:
-        stages, lessons = _fetch_nested(UUID(str(row["id"])), current.id)
-        details.append(_to_roadmap(row, stages, lessons))
-    return details
+    # N roadmap -> N cặp query nested chạy song song thay vì nối tiếp.
+    nested = await asyncio.gather(
+        *[_fetch_nested(UUID(str(row["id"])), current.id) for row in rows]
+    )
+    return [_to_roadmap(row, stages, lessons) for row, (stages, lessons) in zip(rows, nested)]
 
 
 @router.post("", response_model=RoadmapDetail, status_code=status.HTTP_201_CREATED)
-def create_roadmap(payload: RoadmapCreate, current: SupabaseUser = Depends(get_current_supabase_user)) -> RoadmapDetail:
+async def create_roadmap(payload: RoadmapCreate, current: SupabaseUser = Depends(get_current_supabase_user)) -> RoadmapDetail:
     """Tạo lộ trình mới kèm stages + lessons."""
     _validate_create(payload)
     title = payload.title.strip()
@@ -351,14 +382,16 @@ def create_roadmap(payload: RoadmapCreate, current: SupabaseUser = Depends(get_c
     # goal_id phải thuộc về chính mình (tránh gán goal của user khác).
     if payload.goal_id is not None:
         try:
-            goal = (
-                get_supabase_admin()
-                .table("goals")
-                .select("id")
-                .eq("id", str(payload.goal_id))
-                .eq("user_id", str(current.id))
-                .limit(1)
-                .execute()
+            goal = await run_blocking(
+                lambda: (
+                    get_supabase_admin()
+                    .table("goals")
+                    .select("id")
+                    .eq("id", str(payload.goal_id))
+                    .eq("user_id", str(current.id))
+                    .limit(1)
+                    .execute()
+                )
             )
         except Exception as error:
             _db_error(error)
@@ -382,26 +415,28 @@ def create_roadmap(payload: RoadmapCreate, current: SupabaseUser = Depends(get_c
     values["user_id"] = str(current.id)
     values["goal_id"] = str(payload.goal_id) if payload.goal_id else None
     try:
-        result = (
-            get_supabase_admin().table(ROADMAP_TABLE).insert(values).select(ROADMAP_COLUMNS).execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin().table(ROADMAP_TABLE).insert(values).select(ROADMAP_COLUMNS).execute()
+            )
         )
     except Exception as error:
         _db_error(error)
     if not result.data:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database operation failed")
     row = result.data[0]
-    stages, lessons = _insert_nested(str(row["id"]), str(current.id), list(payload.stages or []), list(payload.lessons or []))
+    stages, lessons = await _insert_nested(str(row["id"]), str(current.id), list(payload.stages or []), list(payload.lessons or []))
     return _to_roadmap(row, stages, lessons)
 
 
 @router.get("/{roadmap_id}", response_model=RoadmapDetail)
-def read_roadmap(roadmap_id: UUID, current: SupabaseUser = Depends(get_current_supabase_user)) -> RoadmapDetail:
+async def read_roadmap(roadmap_id: UUID, current: SupabaseUser = Depends(get_current_supabase_user)) -> RoadmapDetail:
     """Đọc 1 lộ trình của chính mình."""
-    return _fetch_detail(roadmap_id, current.id)
+    return await _fetch_detail(roadmap_id, current.id)
 
 
-def _apply_update(roadmap_id: UUID, payload: RoadmapUpdate, user_id: UUID) -> RoadmapDetail:
-    row = _fetch_roadmap_row(roadmap_id, user_id)
+async def _apply_update(roadmap_id: UUID, payload: RoadmapUpdate, user_id: UUID) -> RoadmapDetail:
+    row = await _fetch_roadmap_row(roadmap_id, user_id)
     current = Roadmap.model_validate({**row, "start_time": _norm_time(row.get("start_time"), "19:00")})
     values = payload.model_dump(exclude_unset=True, mode="json", exclude={"stages", "lessons"})
     # goal_id: None = gỡ liên kết; không gửi = giữ nguyên. Chuỗi rỗng cũng coi như gỡ.
@@ -409,14 +444,16 @@ def _apply_update(roadmap_id: UUID, payload: RoadmapUpdate, user_id: UUID) -> Ro
         values["goal_id"] = None
     if values.get("goal_id"):
         try:
-            goal = (
-                get_supabase_admin()
-                .table("goals")
-                .select("id")
-                .eq("id", str(values["goal_id"]))
-                .eq("user_id", str(user_id))
-                .limit(1)
-                .execute()
+            goal = await run_blocking(
+                lambda: (
+                    get_supabase_admin()
+                    .table("goals")
+                    .select("id")
+                    .eq("id", str(values["goal_id"]))
+                    .eq("user_id", str(user_id))
+                    .limit(1)
+                    .execute()
+                )
             )
         except Exception as error:
             _db_error(error)
@@ -464,14 +501,16 @@ def _apply_update(roadmap_id: UUID, payload: RoadmapUpdate, user_id: UUID) -> Ro
         )
     if values:
         try:
-            result = (
-                get_supabase_admin()
-                .table(ROADMAP_TABLE)
-                .update(values)
-                .eq("id", str(roadmap_id))
-                .eq("user_id", str(user_id))
-                .select(ROADMAP_COLUMNS)
-                .execute()
+            result = await run_blocking(
+                lambda: (
+                    get_supabase_admin()
+                    .table(ROADMAP_TABLE)
+                    .update(values)
+                    .eq("id", str(roadmap_id))
+                    .eq("user_id", str(user_id))
+                    .select(ROADMAP_COLUMNS)
+                    .execute()
+                )
             )
         except Exception as error:
             _db_error(error)
@@ -479,45 +518,51 @@ def _apply_update(roadmap_id: UUID, payload: RoadmapUpdate, user_id: UUID) -> Ro
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Roadmap not found")
         row = result.data[0]
     if nested_stages is not None or nested_lessons is not None:
-        _replace_nested(roadmap_id, user_id, nested_stages, nested_lessons)
-    return _fetch_detail(roadmap_id, user_id)
+        await _replace_nested(roadmap_id, user_id, nested_stages, nested_lessons)
+    return await _fetch_detail(roadmap_id, user_id)
 
 
 @router.put("/{roadmap_id}", response_model=RoadmapDetail)
-def update_roadmap(roadmap_id: UUID, payload: RoadmapUpdate, current: SupabaseUser = Depends(get_current_supabase_user)) -> RoadmapDetail:
+async def update_roadmap(roadmap_id: UUID, payload: RoadmapUpdate, current: SupabaseUser = Depends(get_current_supabase_user)) -> RoadmapDetail:
     """Sửa lộ trình (chỉ field được gửi mới đổi; gửi kèm stages/lessons để thay nested)."""
-    return _apply_update(roadmap_id, payload, current.id)
+    return await _apply_update(roadmap_id, payload, current.id)
 
 
 @router.patch("/{roadmap_id}", response_model=RoadmapDetail)
-def patch_roadmap(roadmap_id: UUID, payload: RoadmapUpdate, current: SupabaseUser = Depends(get_current_supabase_user)) -> RoadmapDetail:
+async def patch_roadmap(roadmap_id: UUID, payload: RoadmapUpdate, current: SupabaseUser = Depends(get_current_supabase_user)) -> RoadmapDetail:
     """Alias của PUT cho client thích PATCH từng field."""
-    return _apply_update(roadmap_id, payload, current.id)
+    return await _apply_update(roadmap_id, payload, current.id)
 
 
 @router.delete("/{roadmap_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_roadmap(roadmap_id: UUID, current: SupabaseUser = Depends(get_current_supabase_user)) -> Response:
+async def delete_roadmap(roadmap_id: UUID, current: SupabaseUser = Depends(get_current_supabase_user)) -> Response:
     """Xóa lộ trình + toàn bộ stages/lessons (CASCADE)."""
-    _fetch_roadmap_row(roadmap_id, current.id)
+    await _fetch_roadmap_row(roadmap_id, current.id)
     try:
-        get_supabase_admin().table(ROADMAP_TABLE).delete().eq("id", str(roadmap_id)).eq(
-            "user_id", str(current.id)
-        ).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(ROADMAP_TABLE).delete().eq("id", str(roadmap_id)).eq(
+                    "user_id", str(current.id)
+                ).execute()
+            )
+        )
     except Exception as error:
         _db_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-def _fetch_lesson(lesson_id: UUID, user_id: UUID) -> dict:
+async def _fetch_lesson(lesson_id: UUID, user_id: UUID) -> dict:
     try:
-        result = (
-            get_supabase_admin()
-            .table(LESSON_TABLE)
-            .select(LESSON_COLUMNS)
-            .eq("id", str(lesson_id))
-            .eq("user_id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(LESSON_TABLE)
+                .select(LESSON_COLUMNS)
+                .eq("id", str(lesson_id))
+                .eq("user_id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -527,11 +572,11 @@ def _fetch_lesson(lesson_id: UUID, user_id: UUID) -> dict:
 
 
 @router.patch("/lessons/{lesson_id}", response_model=RoadmapLesson)
-def patch_lesson(
+async def patch_lesson(
     lesson_id: UUID, payload: RoadmapLessonUpdate, current: SupabaseUser = Depends(get_current_supabase_user)
 ) -> RoadmapLesson:
     """Tick done / sửa 1 buổi học (chỉ field được gửi mới đổi)."""
-    row = _fetch_lesson(lesson_id, current.id)
+    row = await _fetch_lesson(lesson_id, current.id)
     current_lesson = _to_lesson(row)
     values = payload.model_dump(exclude_unset=True, mode="json")
     if "title" in values and values["title"] is not None:
@@ -558,14 +603,16 @@ def patch_lesson(
     if "end_time" in values:
         values["end_time"] = merged_end + (":00" if len(merged_end) == 5 else "")
     try:
-        result = (
-            get_supabase_admin()
-            .table(LESSON_TABLE)
-            .update(values)
-            .eq("id", str(lesson_id))
-            .eq("user_id", str(current.id))
-            .select(LESSON_COLUMNS)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(LESSON_TABLE)
+                .update(values)
+                .eq("id", str(lesson_id))
+                .eq("user_id", str(current.id))
+                .select(LESSON_COLUMNS)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)

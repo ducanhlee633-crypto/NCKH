@@ -4,6 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from schema import AI_TONE_VALUES, UserPreferences, UserPreferencesUpdate
 from supabase_client import get_supabase_admin
@@ -44,15 +45,17 @@ def _raise_database_error(error: Exception) -> None:
     ) from error
 
 
-def _fetch_row(user_id: UUID) -> dict | None:
+async def _fetch_row(user_id: UUID) -> dict | None:
     try:
-        result = (
-            get_supabase_admin()
-            .table(PREFERENCES_TABLE)
-            .select(PREFERENCES_COLUMNS)
-            .eq("id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(PREFERENCES_TABLE)
+                .select(PREFERENCES_COLUMNS)
+                .eq("id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _raise_database_error(error)
@@ -73,15 +76,15 @@ def _to_preferences(row: dict | None, user_id: UUID | None = None) -> UserPrefer
 
 
 @router.get("/me", response_model=UserPreferences, response_model_by_alias=True)
-def read_own_preferences(
+async def read_own_preferences(
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> UserPreferences:
     """Đọc lựa chọn Settings của chính mình. Chưa có dòng nào -> trả defaults."""
-    return _to_preferences(_fetch_row(current.id), current.id)
+    return _to_preferences(await _fetch_row(current.id), current.id)
 
 
 @router.put("/me", response_model=UserPreferences, response_model_by_alias=True)
-def upsert_own_preferences(
+async def upsert_own_preferences(
     payload: UserPreferencesUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> UserPreferences:
@@ -91,29 +94,33 @@ def upsert_own_preferences(
     values = {k: v for k, v in values.items() if v is not None or k == "avatar"}
     if "avatar" in values and values["avatar"] is not None and values["avatar"] == "":
         values["avatar"] = None
-    existing = _fetch_row(current.id)
+    existing = await _fetch_row(current.id)
     try:
         if existing:
             if not values:
                 return _to_preferences(existing, current.id)
-            result = (
-                get_supabase_admin()
-                .table(PREFERENCES_TABLE)
-                .update(values)
-                .eq("id", str(current.id))
-                .select(PREFERENCES_COLUMNS)
-                .execute()
+            result = await run_blocking(
+                lambda: (
+                    get_supabase_admin()
+                    .table(PREFERENCES_TABLE)
+                    .update(values)
+                    .eq("id", str(current.id))
+                    .select(PREFERENCES_COLUMNS)
+                    .execute()
+                )
             )
             if not result.data:
                 raise HTTPException(status_code=404, detail="Preferences not found")
             return _to_preferences(result.data[0], current.id)
         merged = {**DEFAULTS, **values, "id": str(current.id), "user_id": str(current.id)}
-        result = (
-            get_supabase_admin()
-            .table(PREFERENCES_TABLE)
-            .insert(merged)
-            .select(PREFERENCES_COLUMNS)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(PREFERENCES_TABLE)
+                .insert(merged)
+                .select(PREFERENCES_COLUMNS)
+                .execute()
+            )
         )
         if not result.data:
             raise HTTPException(status_code=503, detail="Database operation failed")

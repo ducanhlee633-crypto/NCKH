@@ -12,6 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from schema import AI_TONE_VALUES, GRADE_VALUES
 from supabase_client import get_supabase_admin
@@ -75,16 +76,18 @@ def _db_error(error: Exception) -> None:
     ) from error
 
 
-def _fetch_profile(user_id: UUID) -> dict | None:
+async def _fetch_profile(user_id: UUID) -> dict | None:
     """Đọc profiles (grade + created_at), fallback None nếu DB cũ chưa có cột grade."""
     try:
-        result = (
-            get_supabase_admin()
-            .table(PROFILES_TABLE)
-            .select("id,grade,created_at")
-            .eq("id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(PROFILES_TABLE)
+                .select("id,grade,created_at")
+                .eq("id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         message = str(error).lower()
@@ -107,39 +110,43 @@ def _is_old_account(profile: dict | None) -> bool:
         return False
 
 
-def _fetch_grade(user_id: UUID) -> str | None:
+async def _fetch_grade(user_id: UUID) -> str | None:
     """Đọc profiles.grade, fallback None nếu DB cũ chưa có cột grade."""
-    profile = _fetch_profile(user_id)
+    profile = await _fetch_profile(user_id)
     if not profile:
         return None
     grade = profile.get("grade")
     return grade if grade in GRADE_SET else None
 
 
-def _fetch_goals_count(user_id: UUID) -> int:
+async def _fetch_goals_count(user_id: UUID) -> int:
     try:
-        result = (
-            get_supabase_admin()
-            .table(GOALS_TABLE)
-            .select("id")
-            .eq("user_id", str(user_id))
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(GOALS_TABLE)
+                .select("id")
+                .eq("user_id", str(user_id))
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
     return len(result.data or [])
 
 
-def _fetch_preferences(user_id: UUID) -> dict | None:
+async def _fetch_preferences(user_id: UUID) -> dict | None:
     """Trả row preferences nếu đã có dòng (tức user đã chọn giọng/giờ ở onboarding hoặc Settings)."""
     try:
-        result = (
-            get_supabase_admin()
-            .table(PREFERENCES_TABLE)
-            .select("id,user_id,ai_tone,weekly_hours")
-            .eq("id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(PREFERENCES_TABLE)
+                .select("id,user_id,ai_tone,weekly_hours")
+                .eq("id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -147,16 +154,21 @@ def _fetch_preferences(user_id: UUID) -> dict | None:
     return rows[0] if rows else None
 
 
-def _build_status(user_id: UUID) -> OnboardingStatus:
-    profile = _fetch_profile(user_id)
+async def _build_status(user_id: UUID) -> OnboardingStatus:
+    import asyncio
+
+    profile = await _fetch_profile(user_id)
     # Tài khoản cũ: bỏ qua onboarding, cho vào app luôn.
     if _is_old_account(profile):
         grade = profile.get("grade") if profile else None
         grade = grade if grade in GRADE_SET else None
+        goals_count, prefs = await asyncio.gather(
+            _fetch_goals_count(user_id), _fetch_preferences(user_id)
+        )
         return OnboardingStatus(
             grade=grade,
-            goals_count=_fetch_goals_count(user_id),
-            has_preferences=_fetch_preferences(user_id) is not None,
+            goals_count=goals_count,
+            has_preferences=prefs is not None,
             ai_tone=None,
             weekly_hours=None,
             completed=True,
@@ -165,8 +177,9 @@ def _build_status(user_id: UUID) -> OnboardingStatus:
         )
     grade = profile.get("grade") if profile else None
     grade = grade if grade in GRADE_SET else None
-    goals_count = _fetch_goals_count(user_id)
-    prefs = _fetch_preferences(user_id)
+    goals_count, prefs = await asyncio.gather(
+        _fetch_goals_count(user_id), _fetch_preferences(user_id)
+    )
     has_preferences = prefs is not None
     ai_tone = prefs.get("ai_tone") if prefs else None
     weekly_hours = prefs.get("weekly_hours") if prefs else None
@@ -202,15 +215,15 @@ def _build_status(user_id: UUID) -> OnboardingStatus:
 
 
 @router.get("/status", response_model=OnboardingStatus)
-def read_onboarding_status(
+async def read_onboarding_status(
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> OnboardingStatus:
     """Cho App.jsx biết user đã xong onboarding chưa + đang dở ở bước nào."""
-    return _build_status(current.id)
+    return await _build_status(current.id)
 
 
 @router.post("/complete", response_model=OnboardingStatus)
-def complete_onboarding(
+async def complete_onboarding(
     payload: OnboardingCompleteRequest,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> OnboardingStatus:
@@ -245,9 +258,13 @@ def complete_onboarding(
 
     # 1. Lớp -> profiles.grade
     try:
-        get_supabase_admin().table(PROFILES_TABLE).update({"grade": payload.grade}).eq(
-            "id", str(current.id)
-        ).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(PROFILES_TABLE).update({"grade": payload.grade}).eq(
+                    "id", str(current.id)
+                ).execute()
+            )
+        )
     except Exception as error:
         message = str(error).lower()
         missing_grade = "grade" in message and ("column" in message or "schema" in message or "42703" in message)
@@ -260,37 +277,49 @@ def complete_onboarding(
 
     # 2. Giọng AI + giờ học -> user_preferences (upsert giữ các field khác).
     try:
-        existing = _fetch_preferences(current.id)
+        existing = await _fetch_preferences(current.id)
         if existing:
-            get_supabase_admin().table(PREFERENCES_TABLE).update(
-                {"ai_tone": payload.ai_tone, "weekly_hours": payload.weekly_hours}
-            ).eq("id", str(current.id)).execute()
+            await run_blocking(
+                lambda: (
+                    get_supabase_admin().table(PREFERENCES_TABLE).update(
+                        {"ai_tone": payload.ai_tone, "weekly_hours": payload.weekly_hours}
+                    ).eq("id", str(current.id)).execute()
+                )
+            )
         else:
-            get_supabase_admin().table(PREFERENCES_TABLE).insert(
-                {
-                    "id": str(current.id),
-                    "user_id": str(current.id),
-                    "avatar": None,
-                    "theme": "light",
-                    "color": "blue",
-                    "ranking": True,
-                    "streak": True,
-                    "reminders": True,
-                    "reminder_minutes": 15,
-                    "weekly_hours": payload.weekly_hours,
-                    "sound": True,
-                    "ai_tone": payload.ai_tone,
-                }
-            ).execute()
+            await run_blocking(
+                lambda: (
+                    get_supabase_admin().table(PREFERENCES_TABLE).insert(
+                        {
+                            "id": str(current.id),
+                            "user_id": str(current.id),
+                            "avatar": None,
+                            "theme": "light",
+                            "color": "blue",
+                            "ranking": True,
+                            "streak": True,
+                            "reminders": True,
+                            "reminder_minutes": 15,
+                            "weekly_hours": payload.weekly_hours,
+                            "sound": True,
+                            "ai_tone": payload.ai_tone,
+                        }
+                    ).execute()
+                )
+            )
     except Exception as error:
         _db_error(error)
 
     # 3. Mục tiêu -> bảng goals. Nếu đã có ≥3 (retry/reload) thì bỏ qua để không nhân bản.
     try:
-        current_count = _fetch_goals_count(current.id)
+        current_count = await _fetch_goals_count(current.id)
         if current_count < 3:
-            get_supabase_admin().table(GOALS_TABLE).insert(cleaned_goals).execute()
+            await run_blocking(
+                lambda: (
+                    get_supabase_admin().table(GOALS_TABLE).insert(cleaned_goals).execute()
+                )
+            )
     except Exception as error:
         _db_error(error)
 
-    return _build_status(current.id)
+    return await _build_status(current.id)

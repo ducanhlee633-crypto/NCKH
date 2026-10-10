@@ -5,6 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from schema import Feedback, FeedbackCreate
 from supabase_client import get_supabase_admin
@@ -28,16 +29,18 @@ def _to_feedback(row: dict) -> Feedback:
     return Feedback.model_validate(row)
 
 
-def _fetch_one(feedback_id: UUID, user_id: UUID) -> dict:
+async def _fetch_one(feedback_id: UUID, user_id: UUID) -> dict:
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("id", str(feedback_id))
-            .eq("user_id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("id", str(feedback_id))
+                .eq("user_id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -47,17 +50,19 @@ def _fetch_one(feedback_id: UUID, user_id: UUID) -> dict:
 
 
 @router.get("", response_model=list[Feedback])
-def list_feedback(
+async def list_feedback(
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> list[Feedback]:
     """Liệt kê góp ý của chính mình (mới nhất trước)."""
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("user_id", str(current.id))
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("user_id", str(current.id))
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -67,7 +72,7 @@ def list_feedback(
 
 
 @router.post("", response_model=Feedback, status_code=status.HTTP_201_CREATED)
-def create_feedback(
+async def create_feedback(
     payload: FeedbackCreate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Feedback:
@@ -79,12 +84,14 @@ def create_feedback(
             detail="Nội dung góp ý không được để trống.",
         )
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .insert({"user_id": str(current.id), "message": message})
-            .select(COLUMNS)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .insert({"user_id": str(current.id), "message": message})
+                .select(COLUMNS)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -94,25 +101,29 @@ def create_feedback(
 
 
 @router.get("/{feedback_id}", response_model=Feedback)
-def read_feedback(
+async def read_feedback(
     feedback_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Feedback:
     """Đọc 1 góp ý của chính mình."""
-    return _to_feedback(_fetch_one(feedback_id, current.id))
+    return _to_feedback(await _fetch_one(feedback_id, current.id))
 
 
 @router.delete("/{feedback_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_feedback(
+async def delete_feedback(
     feedback_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Response:
     """Xóa góp ý của chính mình (204)."""
-    _fetch_one(feedback_id, current.id)
+    await _fetch_one(feedback_id, current.id)
     try:
-        get_supabase_admin().table(TABLE).delete().eq("id", str(feedback_id)).eq(
-            "user_id", str(current.id)
-        ).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).delete().eq("id", str(feedback_id)).eq(
+                    "user_id", str(current.id)
+                ).execute()
+            )
+        )
     except Exception as error:
         _db_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

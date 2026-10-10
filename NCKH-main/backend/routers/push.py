@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from config import get_settings
 from schema import PushSubscription, PushSubscriptionCreate, PushTestRequest
@@ -32,7 +33,7 @@ def _to_subscription(row: dict) -> PushSubscription:
     return PushSubscription.model_validate(dict(row))
 
 
-def _send_webpush(endpoint: str, p256dh: str, auth: str, payload: dict) -> None:
+async def _send_webpush(endpoint: str, p256dh: str, auth: str, payload: dict) -> None:
     """Gửi 1 push tới 1 subscription. Ném HTTPException nếu chưa cấu hình VAPID."""
     settings = get_settings()
     if not settings.vapid_public_key or not settings.vapid_private_key:
@@ -49,7 +50,8 @@ def _send_webpush(endpoint: str, p256dh: str, auth: str, payload: dict) -> None:
         ) from error
     subscription_info = {"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}}
     try:
-        webpush(
+        await run_blocking(
+            webpush,
             subscription_info=subscription_info,
             data=json.dumps(payload, ensure_ascii=False),
             vapid_private_key=settings.vapid_private_key,
@@ -63,7 +65,7 @@ def _send_webpush(endpoint: str, p256dh: str, auth: str, payload: dict) -> None:
 
 
 @router.get("/vapid-key")
-def get_vapid_public_key() -> dict:
+async def get_vapid_public_key() -> dict:
     """Public key cho frontend gọi PushManager.subscribe. Không cần đăng nhập."""
     public_key = get_settings().vapid_public_key
     if not public_key:
@@ -72,17 +74,19 @@ def get_vapid_public_key() -> dict:
 
 
 @router.get("/subscriptions", response_model=list[PushSubscription])
-def list_own_subscriptions(
+async def list_own_subscriptions(
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> list[PushSubscription]:
     """Liệt kê các thiết bị đã bật thông báo của chính mình."""
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("user_id", str(current.id))
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("user_id", str(current.id))
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -90,7 +94,7 @@ def list_own_subscriptions(
 
 
 @router.post("/subscribe", response_model=PushSubscription, status_code=status.HTTP_201_CREATED)
-def subscribe_push(
+async def subscribe_push(
     payload: PushSubscriptionCreate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> PushSubscription:
@@ -103,32 +107,38 @@ def subscribe_push(
         "user_agent": (payload.user_agent or "")[:512] or None,
     }
     try:
-        existing = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("user_id", str(current.id))
-            .eq("endpoint", payload.endpoint)
-            .limit(1)
-            .execute()
+        existing = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("user_id", str(current.id))
+                .eq("endpoint", payload.endpoint)
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
     try:
         if existing.data:
             row_id = existing.data[0]["id"]
-            result = (
-                get_supabase_admin()
-                .table(TABLE)
-                .update(values)
-                .eq("id", row_id)
-                .eq("user_id", str(current.id))
-                .select(COLUMNS)
-                .execute()
+            result = await run_blocking(
+                lambda: (
+                    get_supabase_admin()
+                    .table(TABLE)
+                    .update(values)
+                    .eq("id", row_id)
+                    .eq("user_id", str(current.id))
+                    .select(COLUMNS)
+                    .execute()
+                )
             )
         else:
-            result = (
-                get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+            result = await run_blocking(
+                lambda: (
+                    get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+                )
             )
     except Exception as error:
         _db_error(error)
@@ -138,75 +148,91 @@ def subscribe_push(
 
 
 @router.delete("/unsubscribe", status_code=status.HTTP_204_NO_CONTENT)
-def unsubscribe_push(
+async def unsubscribe_push(
     endpoint: str,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Response:
     """Hủy 1 thiết bị (khi user tắt thông báo hoặc SW hết hạn)."""
     try:
-        get_supabase_admin().table(TABLE).delete().eq("user_id", str(current.id)).eq(
-            "endpoint", endpoint
-        ).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).delete().eq("user_id", str(current.id)).eq(
+                    "endpoint", endpoint
+                ).execute()
+            )
+        )
     except Exception as error:
         _db_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-def _fetch_user_subscriptions(user_id: UUID) -> list[dict]:
+async def _fetch_user_subscriptions(user_id: UUID) -> list[dict]:
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("user_id", str(user_id))
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("user_id", str(user_id))
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
     return result.data or []
 
 
-def _delete_subscription(row_id: str, user_id: UUID) -> None:
+async def _delete_subscription(row_id: str, user_id: UUID) -> None:
     try:
-        get_supabase_admin().table(TABLE).delete().eq("id", row_id).eq(
-            "user_id", str(user_id)
-        ).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).delete().eq("id", row_id).eq(
+                    "user_id", str(user_id)
+                ).execute()
+            )
+        )
     except Exception:
         pass
 
 
-def send_push_to_user(user_id: UUID, title: str, body: str, url: str = "/#/dashboard") -> dict:
+async def send_push_to_user(user_id: UUID, title: str, body: str, url: str = "/#/dashboard") -> dict:
     """Hàm dùng chung cho các tính năng khác (nhắc hạn nộp, tới giờ học...).
 
     Trả về {sent, removed}. Subscription hết hạn (410) tự dọn khỏi DB.
+    Gửi song song tới mọi thiết bị của user thay vì nối tiếp từng cái.
     """
+    import asyncio
+
     payload = {"title": title, "body": body, "url": url}
-    sent = 0
-    removed = 0
-    for row in _fetch_user_subscriptions(user_id):
+
+    async def _send_one(row: dict) -> str:
         try:
-            _send_webpush(row["endpoint"], row["p256dh"], row["auth"], payload)
-            sent += 1
+            await _send_webpush(row["endpoint"], row["p256dh"], row["auth"], payload)
+            return "sent"
         except HTTPException as error:
             # 502 từ _send_webpush ~ endpoint chết -> xóa để lần sau khỏi gửi lại.
             if error.status_code == 502:
-                _delete_subscription(str(row["id"]), user_id)
-                removed += 1
+                await _delete_subscription(str(row["id"]), user_id)
+                return "removed"
             elif error.status_code == 503:
                 raise
-    return {"sent": sent, "removed": removed}
+            return "failed"
+
+    rows = await _fetch_user_subscriptions(user_id)
+    outcomes = await asyncio.gather(*[_send_one(row) for row in rows])
+    return {"sent": outcomes.count("sent"), "removed": outcomes.count("removed")}
 
 
 @router.post("/test")
-def send_test_push(
+async def send_test_push(
     payload: PushTestRequest,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> dict:
     """Gửi thử tới TẤT CẢ thiết bị của chính mình. Dùng để kiểm tra trên điện thoại."""
-    rows = _fetch_user_subscriptions(current.id)
+    rows = await _fetch_user_subscriptions(current.id)
     if not rows:
         raise HTTPException(
             status_code=404,
             detail="Chưa có thiết bị nào đăng ký. Bấm 'Bật thông báo' trên điện thoại trước.",
         )
-    return send_push_to_user(current.id, payload.title, payload.body, payload.url)
+    return await send_push_to_user(current.id, payload.title, payload.body, payload.url)

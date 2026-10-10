@@ -22,7 +22,7 @@ export default function AppShell({ currentPage, onNavigate, children, user, onLo
   return (
     <div className={'app-shell' + (sidebarCollapsed ? ' sidebar-collapsed' : '')}>
       <a className="skip-link" href={'#' + currentPage + '/main-content'}>Đến nội dung chính</a>
-      <Sidebar currentPage={currentPage} onNavigate={onNavigate} collapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
+      <Sidebar currentPage={currentPage} onNavigate={onNavigate} collapsed={sidebarCollapsed} />
       <div className="workspace">
         <Topbar currentPage={currentPage} onNavigate={onNavigate} user={user} onLogout={onLogout} sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
         <main className="main-content" id="main-content" tabIndex={-1}>{children}</main>

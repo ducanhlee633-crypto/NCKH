@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from services.stress import compute_stress
 from supabase_client import get_supabase_admin
@@ -59,7 +60,7 @@ def _vn_hour(moment: datetime) -> int:
 
 
 @router.post("/stress/preview")
-def preview_stress(payload: StressPreviewRequest) -> dict:
+async def preview_stress(payload: StressPreviewRequest) -> dict:
     """Tính thử điểm tải từ số liệu thủ công (không cần đăng nhập)."""
     result = compute_stress(
         deadline_count=payload.deadline_count,
@@ -71,17 +72,50 @@ def preview_stress(payload: StressPreviewRequest) -> dict:
 
 
 @router.get("/stress")
-def my_stress(current: SupabaseUser = Depends(get_current_supabase_user)) -> dict:
-    """Tính điểm tải của chính mình từ dữ liệu thật."""
+async def my_stress(current: SupabaseUser = Depends(get_current_supabase_user)) -> dict:
+    """Tính điểm tải của chính mình từ dữ liệu thật (4 query độc lập chạy song song)."""
+    import asyncio
+
     today = datetime.now(timezone.utc).date()
     week_ago = today - timedelta(days=7)
     user_id = str(current.id)
+
+    async def _deadlines():
+        return await run_blocking(
+            lambda: (
+                get_supabase_admin().table("deadlines").select("due_date,status").eq("user_id", user_id).execute()
+            )
+        )
+
+    async def _weekly():
+        return await run_blocking(
+            lambda: (
+                get_supabase_admin().table("weekly_tasks").select("date,status").eq("user_id", user_id).execute()
+            )
+        )
+
+    async def _pomodoros():
+        return await run_blocking(
+            lambda: (
+                get_supabase_admin().table("pomodoro_sessions").select("started_at").eq("user_id", user_id).execute()
+            )
+        )
+
+    async def _daily():
+        return await run_blocking(
+            lambda: (
+                get_supabase_admin().table("daily_tasks").select("task_date,done").eq("user_id", user_id).execute()
+            )
+        )
+
     try:
-        db = get_supabase_admin()
-        deadlines = (db.table("deadlines").select("due_date,status").eq("user_id", user_id).execute().data or [])
-        weekly = (db.table("weekly_tasks").select("date,status").eq("user_id", user_id).execute().data or [])
-        pomodoros = (db.table("pomodoro_sessions").select("started_at").eq("user_id", user_id).execute().data or [])
-        daily = (db.table("daily_tasks").select("task_date,done").eq("user_id", user_id).execute().data or [])
+        deadline_rows, weekly_rows, pomodoro_rows, daily_rows = await asyncio.gather(
+            _deadlines(), _weekly(), _pomodoros(), _daily()
+        )
+        deadlines = deadline_rows.data or []
+        weekly = weekly_rows.data or []
+        pomodoros = pomodoro_rows.data or []
+        daily = daily_rows.data or []
     except Exception as error:
         _db_error(error)
 

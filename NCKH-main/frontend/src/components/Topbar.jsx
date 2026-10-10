@@ -50,8 +50,8 @@ export default function Topbar({ currentPage, onNavigate, user, onLogout, sideba
         onClick={onToggleSidebar}
         aria-expanded={!sidebarCollapsed}
         aria-controls="main-sidebar"
-        title={sidebarCollapsed ? 'Mở sidebar (Ctrl+B)' : 'Thu gọn sidebar để đọc rộng hơn (Ctrl+B)'}
-        aria-label={sidebarCollapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
+        title={sidebarCollapsed ? 'Mở rộng sidebar (Ctrl+B)' : 'Thu gọn thành dải icon (Ctrl+B)'}
+        aria-label={sidebarCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar thành icon'}
       >
         <Icon name={sidebarCollapsed ? 'sidebar-expand' : 'sidebar-collapse'} size={20} />
       </button>}

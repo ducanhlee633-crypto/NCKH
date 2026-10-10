@@ -5,6 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
+from async_utils import run_blocking
 from auth import SupabaseUser, get_current_supabase_user
 from schema import (
     WEEKLY_TASK_PRIORITY_VALUES,
@@ -50,16 +51,18 @@ def _to_task(row: dict) -> WeeklyTask:
     return WeeklyTask.model_validate(data)
 
 
-def _fetch_one(task_id: UUID, user_id: UUID) -> dict:
+async def _fetch_one(task_id: UUID, user_id: UUID) -> dict:
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("id", str(task_id))
-            .eq("user_id", str(user_id))
-            .limit(1)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("id", str(task_id))
+                .eq("user_id", str(user_id))
+                .limit(1)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -105,7 +108,7 @@ def _sort_key(row: dict):
 
 
 @router.get("", response_model=list[WeeklyTask])
-def list_weekly_tasks(
+async def list_weekly_tasks(
     current: SupabaseUser = Depends(get_current_supabase_user),
     from_day: va_date | None = Query(default=None, alias="from"),
     to_day: va_date | None = Query(default=None, alias="to"),
@@ -133,12 +136,14 @@ def list_weekly_tasks(
     norm_subject = _norm_str(subject) or None
     norm_q = _norm_str(q) or None
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .select(COLUMNS)
-            .eq("user_id", str(current.id))
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .select(COLUMNS)
+                .eq("user_id", str(current.id))
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -152,7 +157,7 @@ def list_weekly_tasks(
 
 
 @router.post("", response_model=WeeklyTask, status_code=status.HTTP_201_CREATED)
-def create_weekly_task(
+async def create_weekly_task(
     payload: WeeklyTaskCreate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> WeeklyTask:
@@ -169,8 +174,10 @@ def create_weekly_task(
     values["subject"] = subject or None
     values["user_id"] = str(current.id)
     try:
-        result = (
-            get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).insert(values).select(COLUMNS).execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -180,16 +187,16 @@ def create_weekly_task(
 
 
 @router.get("/{task_id}", response_model=WeeklyTask)
-def read_weekly_task(
+async def read_weekly_task(
     task_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> WeeklyTask:
     """Đọc 1 việc của chính mình."""
-    return _to_task(_fetch_one(task_id, current.id))
+    return _to_task(await _fetch_one(task_id, current.id))
 
 
-def _apply_update(task_id: UUID, payload: WeeklyTaskUpdate, user_id: UUID) -> WeeklyTask:
-    row = _fetch_one(task_id, user_id)
+async def _apply_update(task_id: UUID, payload: WeeklyTaskUpdate, user_id: UUID) -> WeeklyTask:
+    row = await _fetch_one(task_id, user_id)
     current = _to_task(row)
     values = payload.model_dump(exclude_unset=True, mode="json")
     if "title" in values and values["title"] is not None:
@@ -207,14 +214,16 @@ def _apply_update(task_id: UUID, payload: WeeklyTaskUpdate, user_id: UUID) -> We
     if not values:
         return current
     try:
-        result = (
-            get_supabase_admin()
-            .table(TABLE)
-            .update(values)
-            .eq("id", str(task_id))
-            .eq("user_id", str(user_id))
-            .select(COLUMNS)
-            .execute()
+        result = await run_blocking(
+            lambda: (
+                get_supabase_admin()
+                .table(TABLE)
+                .update(values)
+                .eq("id", str(task_id))
+                .eq("user_id", str(user_id))
+                .select(COLUMNS)
+                .execute()
+            )
         )
     except Exception as error:
         _db_error(error)
@@ -224,36 +233,40 @@ def _apply_update(task_id: UUID, payload: WeeklyTaskUpdate, user_id: UUID) -> We
 
 
 @router.put("/{task_id}", response_model=WeeklyTask)
-def update_weekly_task(
+async def update_weekly_task(
     task_id: UUID,
     payload: WeeklyTaskUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> WeeklyTask:
     """Sửa việc (chỉ field được gửi mới đổi)."""
-    return _apply_update(task_id, payload, current.id)
+    return await _apply_update(task_id, payload, current.id)
 
 
 @router.patch("/{task_id}", response_model=WeeklyTask)
-def patch_weekly_task(
+async def patch_weekly_task(
     task_id: UUID,
     payload: WeeklyTaskUpdate,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> WeeklyTask:
     """Alias của PUT — kéo-thả kanban chỉ gửi {status} qua endpoint này."""
-    return _apply_update(task_id, payload, current.id)
+    return await _apply_update(task_id, payload, current.id)
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_weekly_task(
+async def delete_weekly_task(
     task_id: UUID,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> Response:
     """Xóa việc (204)."""
-    _fetch_one(task_id, current.id)
+    await _fetch_one(task_id, current.id)
     try:
-        get_supabase_admin().table(TABLE).delete().eq("id", str(task_id)).eq(
-            "user_id", str(current.id)
-        ).execute()
+        await run_blocking(
+            lambda: (
+                get_supabase_admin().table(TABLE).delete().eq("id", str(task_id)).eq(
+                    "user_id", str(current.id)
+                ).execute()
+            )
+        )
     except Exception as error:
         _db_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
