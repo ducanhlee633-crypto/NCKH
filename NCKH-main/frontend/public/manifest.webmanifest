@@ -1,0 +1,25 @@
+{
+  "name": "Nhịp Học — Sổ học tập",
+  "short_name": "Nhịp Học",
+  "description": "Sổ học tập cho học sinh 6–12: việc cần làm, lịch học, hạn nộp, phòng tập trung.",
+  "start_url": "/#/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F3F8FF",
+  "theme_color": "#1460d2",
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
