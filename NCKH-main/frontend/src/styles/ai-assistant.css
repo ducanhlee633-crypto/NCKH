@@ -83,16 +83,16 @@ html[data-theme="dark"] body .ai-item > button[aria-label="Xóa cuộc trò chuy
 html[data-theme="dark"] body .ai-item > button[aria-label="Xóa cuộc trò chuyện"]:hover { color: #ff9aa2 !important; background: #512d34 !important; }
 html[data-theme="dark"] body .ai-item a { color: var(--blue) !important; }
 html[data-theme="dark"] .ai-assistant-message .md-h1 { border-bottom-color: var(--line); }
-html[data-theme="dark"] .ai-assistant-message .md-table-wrap { background: #182232; border-color: var(--line); }
-html[data-theme="dark"] .ai-assistant-message .md-table { background: #182232; color: var(--ink); }
+html[data-theme="dark"] .ai-assistant-message .md-table-wrap { background: var(--input); border-color: var(--line); }
+html[data-theme="dark"] .ai-assistant-message .md-table { background: var(--input); color: var(--ink); }
 html[data-theme="dark"] .ai-assistant-message .md-table th { background: hsl(var(--accent-hue, 216) 65% 33%); color: #fff; }
 html[data-theme="dark"] .ai-assistant-message .md-table th + th { border-left-color: #ffffff33; }
 html[data-theme="dark"] .ai-assistant-message .md-table td { border-top-color: var(--line); color: var(--ink); }
 html[data-theme="dark"] .ai-assistant-message .md-table td + td { border-left-color: var(--line); }
-html[data-theme="dark"] .ai-assistant-message .md-table tbody tr:nth-child(even) td { background: #263449; }
-html[data-theme="dark"] .ai-assistant-message .md-code { color: var(--ink); background: #263449; border-color: var(--line); }
-html[data-theme="dark"] .ai-assistant-message .md-pre { background: #0b1220; border-color: var(--line); }
-html[data-theme="dark"] .ai-assistant-message .md-quote { color: var(--ink); background: #263449; }
+html[data-theme="dark"] .ai-assistant-message .md-table tbody tr:nth-child(even) td { background: var(--card-2); }
+html[data-theme="dark"] .ai-assistant-message .md-code { color: var(--ink); background: var(--card-2); border-color: var(--line); }
+html[data-theme="dark"] .ai-assistant-message .md-pre { background: #080d18; border-color: var(--line); }
+html[data-theme="dark"] .ai-assistant-message .md-quote { color: var(--ink); background: var(--card-2); }
 html[data-theme="dark"] .ai-assistant-message .md-hr { border-top-color: var(--line); }
 .ai-typing p { opacity: 0.7; font-style: italic; }
 .ai-error { margin: 8px 0; padding: 10px 14px; color: #b42318; background: #fef3f2; border: 1px solid #fecdca; border-radius: 12px; }

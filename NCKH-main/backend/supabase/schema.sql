@@ -1257,3 +1257,108 @@ create policy "ai_memories_delete_own"
   on public.ai_memories for delete
   to authenticated
   using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------
+-- 18. Bảng focus_tasks: việc cần tập trung trong Phòng tập trung.
+--     Nhẹ, nhanh, không ngày (ô nhập task + danh sách chọn/tick):
+--       title    : tên việc (1..160 ký tự) — VD: "Giải 10 bài Toán hàm số"
+--       subject  : môn khóa cứng như pomodoro (NULL = không chọn môn)
+--       status   : 'todo' (Cần làm) | 'doing' (Đang làm) | 'done' (Xong)
+--       position : thứ tự tay (0..10000)
+--     pomodoro_sessions.focus_task_id FK tới bảng này (SET NULL khi xóa task),
+--     task_title là snapshot tên việc lúc hoàn thành phiên (giữ lại dù đổi tên).
+--     Cách chạy: dán toàn bộ file vào SQL Editor > Run (chạy lại an toàn).
+-- ---------------------------------------------------------------------
+create table if not exists public.focus_tasks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null,
+  subject text,
+  status text not null default 'todo',
+  position integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint focus_tasks_title_length check (char_length(title) between 1 and 160),
+  constraint focus_tasks_subject_check check (
+    subject is null
+    or subject in ('Toán', 'Lí', 'Hoá', 'Văn', 'Sinh', 'Sử', 'Địa', 'Tin', 'Dự án',
+                   'Tiếng Anh', 'KHTN', 'GDCD')
+  ),
+  constraint focus_tasks_status_check check (status in ('todo', 'doing', 'done')),
+  constraint focus_tasks_position_check check (position between 0 and 10000)
+);
+
+create index if not exists focus_tasks_user_id_idx
+  on public.focus_tasks (user_id);
+
+create index if not exists focus_tasks_user_status_idx
+  on public.focus_tasks (user_id, status);
+
+drop trigger if exists focus_tasks_updated_at on public.focus_tasks;
+create trigger focus_tasks_updated_at
+before update on public.focus_tasks
+for each row execute function public.set_profile_updated_at();
+
+alter table public.focus_tasks enable row level security;
+
+drop policy if exists "focus_tasks_select_own" on public.focus_tasks;
+create policy "focus_tasks_select_own"
+  on public.focus_tasks for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "focus_tasks_insert_own" on public.focus_tasks;
+create policy "focus_tasks_insert_own"
+  on public.focus_tasks for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "focus_tasks_update_own" on public.focus_tasks;
+create policy "focus_tasks_update_own"
+  on public.focus_tasks for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "focus_tasks_delete_own" on public.focus_tasks;
+create policy "focus_tasks_delete_own"
+  on public.focus_tasks for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------
+-- 18b. Migration: gắn task vào phiên pomodoro đã hoàn thành.
+--     - task_title: snapshot tên việc lúc bấm giờ (ô "Việc đang làm").
+--     - focus_task_id: link tới focus_tasks.id, SET NULL khi task bị xóa
+--       để lịch sử phiên không mất khi user dọn danh sách.
+--     Chạy an toàn nhiều lần (IF NOT EXISTS + DO block).
+-- ---------------------------------------------------------------------
+alter table public.pomodoro_sessions
+  add column if not exists task_title text;
+
+alter table public.pomodoro_sessions
+  add column if not exists focus_task_id uuid;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'pomodoro_sessions_task_title_check') then
+    alter table public.pomodoro_sessions
+      add constraint pomodoro_sessions_task_title_check check (
+        task_title is null or char_length(task_title) between 1 and 160
+      );
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'pomodoro_sessions_focus_task_fk') then
+    alter table public.pomodoro_sessions
+      add constraint pomodoro_sessions_focus_task_fk
+      foreign key (focus_task_id) references public.focus_tasks (id) on delete set null;
+  end if;
+end
+$$;
+
+create index if not exists pomodoro_sessions_focus_task_idx
+  on public.pomodoro_sessions (focus_task_id);

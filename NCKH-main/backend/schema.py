@@ -411,6 +411,11 @@ class PomodoroSessionCreate(BaseModel):
     subject: str | None = Field(default=None, pattern=POMODORO_SUBJECT_PATTERN)
     started_at: datetime
     ended_at: datetime
+    # Việc đang làm của phiên này (ô nhập task ở Phòng tập trung).
+    # task_title: text tự do 1..160 (snapshot tên việc lúc bấm giờ).
+    # focus_task_id: link tới focus_tasks.id (nullable, SET NULL khi task bị xóa).
+    task_title: str | None = Field(default=None, min_length=1, max_length=160)
+    focus_task_id: UUID | None = None
 
 
 class PomodoroSession(BaseModel):
@@ -424,6 +429,8 @@ class PomodoroSession(BaseModel):
     subject: str | None = None
     started_at: datetime
     ended_at: datetime
+    task_title: str | None = None
+    focus_task_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -923,6 +930,57 @@ class DailyTask(BaseModel):
     task_date: va_date
     priority: str = "medium"
     done: bool = False
+    position: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+# ---------------- Focus tasks (PomodoroPage.jsx — ô nhập task) ----------------
+# Danh sách việc cần tập trung trong Phòng tập trung: nhẹ, nhanh, không ngày.
+# - title: tên việc (ô nhập task, 1..160 ký tự) — VD: "Giải 10 bài Toán hàm số".
+# - subject: môn khóa cứng như pomodoro (nullable, khớp CHECK focus_tasks_subject_check).
+# - status: 'todo' (Cần làm) | 'doing' (Đang làm — việc đang bấm giờ) | 'done' (Xong).
+# - position: thứ tự tay (0..10000) để kéo/sắp xếp trong phòng.
+# pomodoro_sessions.focus_task_id FK tới bảng này (SET NULL khi task bị xóa),
+# còn task_title là snapshot tên việc lúc hoàn thành phiên (giữ lại dù task đổi tên).
+
+FOCUS_TASK_STATUS_VALUES = ("todo", "doing", "done")
+
+
+class FocusTaskBase(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str = Field(min_length=1, max_length=160)
+    subject: str | None = Field(default=None, pattern=POMODORO_SUBJECT_PATTERN)
+    status: str = Field(default="todo", pattern=r"^(todo|doing|done)$")
+    position: int = Field(default=0, ge=0, le=10000)
+
+
+class FocusTaskCreate(FocusTaskBase):
+    pass
+
+
+class FocusTaskUpdate(BaseModel):
+    """PUT/PATCH /focus-tasks/{id} — tất cả optional, chỉ cập nhật field được gửi."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+    subject: str | None = Field(default=None, pattern=POMODORO_SUBJECT_PATTERN)
+    status: str | None = Field(default=None, pattern=r"^(todo|doing|done)$")
+    position: int | None = Field(default=None, ge=0, le=10000)
+
+
+class FocusTask(BaseModel):
+    """Một việc tập trung của chính mình trong Phòng tập trung."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    title: str
+    subject: str | None = None
+    status: str = "todo"
     position: int = 0
     created_at: datetime
     updated_at: datetime

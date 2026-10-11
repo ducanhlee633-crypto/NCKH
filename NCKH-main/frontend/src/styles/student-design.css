@@ -198,13 +198,13 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .stats-reflection { margin-top: 24px; }
 .stats-reflection p { color: var(--muted); }
 
-html[data-theme="dark"] { --surface-soft: #263449; --violet-soft: #263449; --mint-soft: #263449; }
+html[data-theme="dark"] { --surface-soft: #1f2a44; --violet-soft: #1f2a44; --mint-soft: #1f2a44; }
 html[data-theme="dark"] :is(.study-notebook, .notebook-copy, .notebook-week, .focus-invitation) { background: var(--card); color: var(--ink); border-color: var(--line); }
-html[data-theme="dark"] .notebook-tab { background: #263449; color: var(--ink); }
+html[data-theme="dark"] .notebook-tab { background: var(--card-2); color: var(--ink); }
 html[data-theme="dark"] .notebook-week { background: repeating-linear-gradient(transparent 0 31px, var(--line) 31px 32px); }
 html[data-theme="dark"] .week-strip .is-today { background: hsl(var(--accent-hue,216) 65% 33%); color: white; }
 html[data-theme="dark"] :is(.focus-invitation .eyebrow, .focus-invitation-icon, .task-progress-copy b, .sidebar .avatar) { color: var(--blue); }
-html[data-theme="dark"] .student-deadline time { background: #263449; color: var(--ink); }
+html[data-theme="dark"] .student-deadline time { background: var(--card-2); color: var(--ink); }
 html[data-theme="dark"] .ai-banner h1 { color: white; }
 
 @media (max-width: 1200px) {

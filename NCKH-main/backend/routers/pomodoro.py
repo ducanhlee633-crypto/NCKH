@@ -24,7 +24,7 @@ from supabase_client import get_supabase_admin
 router = APIRouter(prefix="/pomodoro", tags=["pomodoro"])
 
 TABLE = "pomodoro_sessions"
-COLUMNS = "id,user_id,focus_minutes,subject,started_at,ended_at,created_at,updated_at"
+COLUMNS = "id,user_id,focus_minutes,subject,started_at,ended_at,task_title,focus_task_id,created_at,updated_at"
 
 
 def _db_error(error: Exception) -> None:
@@ -41,6 +41,14 @@ def _to_session(row: dict) -> PomodoroSession:
     if data.get("subject") is not None:
         text = str(data["subject"]).strip()
         data["subject"] = text or None
+    # Chuẩn hóa task kèm phiên: rỗng -> None để khớp Pydantic + frontend.
+    if data.get("task_title") is not None:
+        task_text = str(data["task_title"]).strip()
+        data["task_title"] = task_text[:160] or None
+    else:
+        data["task_title"] = None
+    if not data.get("focus_task_id"):
+        data["focus_task_id"] = None
     return PomodoroSession.model_validate(data)
 
 
@@ -73,11 +81,14 @@ def _validate_payload(payload: PomodoroSessionCreate) -> dict:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Chỉ ghi phiên trong 30 ngày gần đây.",
         )
+    task_title = (payload.task_title or "").strip()[:160] or None
     return {
         "focus_minutes": payload.focus_minutes,
         "subject": subject,
         "started_at": payload.started_at.isoformat(),
         "ended_at": payload.ended_at.isoformat(),
+        "task_title": task_title,
+        "focus_task_id": str(payload.focus_task_id) if payload.focus_task_id else None,
     }
 
 
@@ -188,6 +199,27 @@ async def create_session(
 ) -> PomodoroSession:
     """Ghi 1 phiên focus đã hoàn thành (timer chạy hết giờ mới gọi)."""
     values = _validate_payload(payload)
+    # focus_task_id (nếu có) phải là task của chính mình — tránh gắn nhầm task người khác.
+    if values.get("focus_task_id"):
+        try:
+            check = await run_blocking(
+                lambda: (
+                    get_supabase_admin()
+                    .table("focus_tasks")
+                    .select("id")
+                    .eq("id", values["focus_task_id"])
+                    .eq("user_id", str(current.id))
+                    .limit(1)
+                    .execute()
+                )
+            )
+        except Exception as error:
+            _db_error(error)
+        if not check.data:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Việc tập trung không tồn tại.",
+            )
     values["user_id"] = str(current.id)
     try:
         result = await run_blocking(

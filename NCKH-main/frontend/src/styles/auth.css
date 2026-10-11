@@ -11,7 +11,7 @@
 .auth-account { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 13px; }
 .auth-account > span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html[data-theme="dark"] :is(.auth-page, .auth-card, .auth-page .landing-nav) { background: var(--canvas); color: var(--ink); border-color: var(--line); }
-html[data-theme="dark"] :is(.auth-tabs, .auth-book) { background: #263449; }
+html[data-theme="dark"] :is(.auth-tabs, .auth-book) { background: var(--card-2); }
 html[data-theme="dark"] .auth-tabs button.selected { background: var(--card); }
 html[data-theme="dark"] :is(.auth-card > p, .auth-card label, .auth-card .auth-hint, .auth-footer) { color: var(--muted); }
 @media (max-width: 600px) {

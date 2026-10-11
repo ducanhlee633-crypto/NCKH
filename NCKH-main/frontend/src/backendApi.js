@@ -12,13 +12,33 @@ export { POMODORO_SUBJECTS }
 export const SESSION_KEY = 'nhip-hoc-session'
 export const SESSION_EVENT = 'nhip-hoc-session-change'
 
-export function getSession() {
+// Supabase cấp access_token ngắn hạn (mặc định 1 giờ) + refresh_token dài hạn.
+// Session sống nhiều ngày nhờ tự refresh: access hết hạn nhưng còn
+// refresh_token thì vẫn coi là đăng nhập, interceptor tự đổi token mới trong nền.
+export const REFRESH_MARGIN_MS = 5 * 60 * 1000
+// initSessionSync hẹn refresh trước giờ hết hạn từng này.
+export const BACKGROUND_REFRESH_AHEAD_MS = 60 * 1000
+// Refresh lỗi mạng (không phải 401) thì thử lại sau từng này.
+const REFRESH_RETRY_MS = 30 * 1000
+
+/** Session thô trong storage (kể cả khi access_token đã hết hạn). */
+export function getRawSession() {
   try {
     const session = JSON.parse(sessionStorage.getItem(SESSION_KEY))
-    return session?.access_token && session?.user?.id && session.expires_at > Date.now() ? session : null
+    return session?.access_token && session?.user?.id ? session : null
   } catch {
     return null
   }
+}
+
+/** Session còn dùng được: access chưa hết hạn, hoặc hết rồi nhưng còn
+ * refresh_token để tự đổi token mới (khỏi bắt login lại giữa chừng như lúc
+ * đang chạy pomodoro). Hết cả hai mới tính là đăng xuất. */
+export function getSession() {
+  const session = getRawSession()
+  if (!session) return null
+  if (session.expires_at > Date.now()) return session
+  return session.refresh_token ? session : null
 }
 
 export function saveSession(token) {
@@ -72,15 +92,50 @@ export function onSessionChange(callback) {
   return () => window.removeEventListener(SESSION_EVENT, handler)
 }
 
-/** Khởi động: hết hạn thì tự xóa session. Không cần key gì ở frontend. */
+/** Khởi động: tự refresh trước khi access hết hạn để session sống nhiều ngày.
+ * Chỉ xóa session khi không còn refresh_token hoặc refresh bị từ chối (401). */
 export function initSessionSync() {
-  const session = getSession()
-  if (!session) {
-    try { sessionStorage.removeItem(SESSION_KEY) } catch { /* bỏ qua */ }
-    return () => {}
+  if (typeof window === 'undefined') return () => {}
+  let timer = null
+  const schedule = () => {
+    if (timer) {
+      window.clearTimeout(timer)
+      timer = null
+    }
+    const raw = getRawSession()
+    if (!raw) {
+      try { sessionStorage.removeItem(SESSION_KEY) } catch { /* bỏ qua */ }
+      return
+    }
+    // Không có refresh_token thì giữ hành vi cũ: hết hạn là xóa.
+    if (!raw.refresh_token) {
+      timer = window.setTimeout(clearSession, Math.max(0, (raw.expires_at || 0) - Date.now()))
+      return
+    }
+    const delay = Math.max(0, (raw.expires_at || 0) - Date.now() - BACKGROUND_REFRESH_AHEAD_MS)
+    timer = window.setTimeout(async () => {
+      timer = null
+      const current = getRawSession()
+      if (!current?.refresh_token) {
+        clearSession()
+        return
+      }
+      try {
+        await refreshSession(current.refresh_token)
+        // saveSession bắn SESSION_EVENT -> schedule() chạy lại qua listener.
+      } catch (failure) {
+        if (failure?.response?.status === 401) clearSession()
+        else timer = window.setTimeout(schedule, REFRESH_RETRY_MS)
+      }
+    }, delay)
   }
-  const timer = window.setTimeout(clearSession, Math.max(0, session.expires_at - Date.now()))
-  return () => window.clearTimeout(timer)
+  const onChange = () => schedule()
+  window.addEventListener(SESSION_EVENT, onChange)
+  schedule()
+  return () => {
+    if (timer) window.clearTimeout(timer)
+    window.removeEventListener(SESSION_EVENT, onChange)
+  }
 }
 
 const api = axios.create({
@@ -88,19 +143,64 @@ const api = axios.create({
   timeout: 15000,
 })
 
-api.interceptors.request.use((config) => {
-  const session = getSession()
-  if (session) config.headers.Authorization = `Bearer ${session.access_token}`
+// Chặn nhiều request cùng refresh song song khi token gần hết hạn.
+let refreshPromise = null
+
+export async function refreshSession(refreshToken) {
+  if (refreshPromise) return refreshPromise
+  refreshPromise = (async () => {
+    const { data } = await api.post('/api/auth/refresh', { refresh_token: refreshToken })
+    return saveSession(data)
+  })()
+  try {
+    return await refreshPromise
+  } finally {
+    refreshPromise = null
+  }
+}
+
+/** Trả session có access còn hạn: gần hết hạn (hoặc hết rồi) mà còn
+ * refresh_token thì tự đổi token mới trước, khỏi để request ăn 401. */
+export async function ensureFreshSession() {
+  const raw = getRawSession()
+  if (!raw) return null
+  if (raw.expires_at - Date.now() > REFRESH_MARGIN_MS) return raw
+  if (!raw.refresh_token) return getSession()
+  try {
+    return await refreshSession(raw.refresh_token)
+  } catch {
+    return getSession()
+  }
+}
+
+const isRefreshCall = (config) => String(config?.url || '').includes('/api/auth/refresh')
+
+api.interceptors.request.use(async (config) => {
+  // Chính request refresh thì không tự refresh nữa (tránh đệ quy/deadlock).
+  if (isRefreshCall(config)) return config
+  try {
+    const session = await ensureFreshSession()
+    if (session) {
+      config.headers = config.headers || {}
+      config.headers.Authorization = `Bearer ${session.access_token}`
+    }
+  } catch {
+    const fallback = getRawSession()
+    if (fallback) {
+      config.headers = config.headers || {}
+      config.headers.Authorization = `Bearer ${fallback.access_token}`
+    }
+  }
   return config
 })
 
 api.interceptors.response.use(response => response, async (error) => {
-  const session = getSession()
+  const raw = getRawSession()
   // Access token chết: thử refresh một lần bằng refresh_token rồi request lại.
-  if (error.response?.status === 401 && session?.refresh_token && !error.config._retried) {
+  if (error.response?.status === 401 && raw?.refresh_token && !error.config._retried && !isRefreshCall(error.config)) {
     error.config._retried = true
     try {
-      const refreshed = await refreshSession(session.refresh_token)
+      const refreshed = await refreshSession(raw.refresh_token)
       error.config.headers.Authorization = `Bearer ${refreshed.access_token}`
       return api(error.config)
     } catch { /* rơi xuống đăng xuất */ }
@@ -148,11 +248,6 @@ export async function loginUser({ email, password }) {
   } catch (failure) {
     throw { ...failure, friendlyMessage: backendErrorMessage(failure, 'Không thể đăng nhập. Vui lòng thử lại.') }
   }
-}
-
-export async function refreshSession(refreshToken) {
-  const { data } = await api.post('/api/auth/refresh', { refresh_token: refreshToken })
-  return saveSession(data)
 }
 
 export async function logoutUser() {
@@ -632,14 +727,18 @@ function pomodoroErrorMessage(failure, fallback) {
   return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
 }
 
-/** Chuẩn hóa payload POST /api/pomodoro: {focus_minutes, subject?, started_at, ended_at}. Subject chỉ gửi khi thuộc danh mục khóa cứng. */
-export function pomodoroToPayload({ focusMinutes, focus_minutes, subject, startedAt, started_at, endedAt, ended_at } = {}) {
+/** Chuẩn hóa payload POST /api/pomodoro: {focus_minutes, subject?, task_title?, focus_task_id?, started_at, ended_at}. Subject chỉ gửi khi thuộc danh mục khóa cứng. */
+export function pomodoroToPayload({ focusMinutes, focus_minutes, subject, startedAt, started_at, endedAt, ended_at, taskTitle, task_title, focusTaskId, focus_task_id } = {}) {
   const minutes = Number(focus_minutes ?? focusMinutes ?? 0)
   const toISO = value => (value instanceof Date ? value.toISOString() : String(value || ''))
   const cleanSubject = String(subject || '').trim()
+  const cleanTask = String(task_title ?? taskTitle ?? '').trim().slice(0, 160)
+  const cleanTaskId = String(focus_task_id ?? focusTaskId ?? '').trim()
   return {
     focus_minutes: minutes,
     ...(POMODORO_SUBJECTS.includes(cleanSubject) ? { subject: cleanSubject } : {}),
+    ...(cleanTask ? { task_title: cleanTask } : {}),
+    ...(cleanTaskId ? { focus_task_id: cleanTaskId } : {}),
     started_at: toISO(started_at ?? startedAt),
     ended_at: toISO(ended_at ?? endedAt),
   }
@@ -692,6 +791,100 @@ export async function deletePomodoroSession(id) {
     return null
   } catch (failure) {
     throw { ...failure, friendlyMessage: pomodoroErrorMessage(failure, 'Không xóa được phiên tập trung.') }
+  }
+}
+
+/** Việc tập trung (focus_tasks): ô nhập task + danh sách trong Phòng tập trung. Chỉ gọi khi đã đăng nhập. */
+
+export const FOCUS_TASK_STATUS = ['todo', 'doing', 'done']
+export const FOCUS_TASK_STATUS_LABEL = { todo: 'Cần làm', doing: 'Đang làm', done: 'Xong' }
+
+function focusTaskErrorMessage(failure, fallback) {
+  const detail = failure.response?.data?.detail
+  if (detail) return typeof detail === 'string' ? detail : 'Thông tin việc chưa hợp lệ. Kiểm tra lại.'
+  if (failure.response?.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
+  return failure.response ? fallback : 'Không kết nối được máy chủ. Kiểm tra kết nối và thử lại.'
+}
+
+const normalizeFocusStatus = value => (value === 'doing' || value === 'done' ? value : 'todo')
+
+/** Row server {id,title,subject,status,position} -> item UI PomodoroPage. */
+export function focusTaskFromServer(row = {}) {
+  const subject = String(row.subject || '').trim()
+  return {
+    id: row.id,
+    title: String(row.title || ''),
+    subject: POMODORO_SUBJECTS.includes(subject) ? subject : '',
+    status: normalizeFocusStatus(row.status),
+    position: Number.isInteger(row.position) ? row.position : Number(row.position) || 0,
+  }
+}
+
+/** Item UI -> payload POST/PUT /api/focus-tasks. */
+export function focusTaskToPayload(item = {}) {
+  const title = String(item.title || '').trim().slice(0, 160)
+  const subject = String(item.subject || '').trim()
+  const positionRaw = Number(item.position ?? 0)
+  return {
+    title,
+    ...(POMODORO_SUBJECTS.includes(subject) ? { subject } : { subject: null }),
+    status: normalizeFocusStatus(item.status),
+    position: Number.isInteger(positionRaw) ? Math.max(0, Math.min(10000, positionRaw)) : 0,
+  }
+}
+
+/** GET /api/focus-tasks?status=&subject=&q= — việc tập trung của chính mình. */
+export async function fetchFocusTasks({ status: taskStatus, subject, q } = {}) {
+  const params = new URLSearchParams()
+  if (taskStatus) params.set('status', taskStatus)
+  if (subject) params.set('subject', subject)
+  if (q) params.set('q', q)
+  const query = params.toString()
+  try {
+    const { data } = await api.get('/api/focus-tasks' + (query ? `?${query}` : ''))
+    return Array.isArray(data) ? data : []
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: focusTaskErrorMessage(failure, 'Không tải được việc tập trung.') }
+  }
+}
+
+/** POST /api/focus-tasks — thêm việc cần tập trung. */
+export async function createFocusTask(payload) {
+  try {
+    const { data } = await api.post('/api/focus-tasks', focusTaskToPayload(payload))
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: focusTaskErrorMessage(failure, 'Không lưu được việc tập trung. Vui lòng thử lại.') }
+  }
+}
+
+/** PUT /api/focus-tasks/{id} — sửa việc (đổi tên, môn, trạng thái...). */
+export async function updateFocusTask(id, payload) {
+  try {
+    const { data } = await api.put(`/api/focus-tasks/${encodeURIComponent(String(id || ''))}`, focusTaskToPayload(payload))
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: focusTaskErrorMessage(failure, 'Không sửa được việc tập trung.') }
+  }
+}
+
+/** PATCH /api/focus-tasks/{id} — cập nhật 1 phần (VD: chọn/tick chỉ gửi {status}). Dùng payload thô. */
+export async function patchFocusTask(id, payload) {
+  try {
+    const { data } = await api.patch(`/api/focus-tasks/${encodeURIComponent(String(id || ''))}`, payload)
+    return data
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: focusTaskErrorMessage(failure, 'Không đổi được trạng thái việc.') }
+  }
+}
+
+/** DELETE /api/focus-tasks/{id} — xóa việc (204). Phiên cũ giữ task_title. */
+export async function deleteFocusTask(id) {
+  try {
+    await api.delete(`/api/focus-tasks/${encodeURIComponent(String(id || ''))}`)
+    return null
+  } catch (failure) {
+    throw { ...failure, friendlyMessage: focusTaskErrorMessage(failure, 'Không xóa được việc tập trung.') }
   }
 }
 

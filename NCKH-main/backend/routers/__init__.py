@@ -7,6 +7,7 @@ from .roadmap_ai import router as roadmap_ai_router
 from .ai_sessions import router as ai_sessions_router
 from .ai_memory import router as ai_memory_router
 from .feedback import router as feedback_router
+from .focus_tasks import router as focus_tasks_router
 from .friends import router as friends_router
 from .goals import router as goals_router
 from .pomodoro import router as pomodoro_router
@@ -35,6 +36,7 @@ router.include_router(pomodoro_router)
 router.include_router(push_router)
 router.include_router(friends_router)
 router.include_router(feedback_router)
+router.include_router(focus_tasks_router)
 router.include_router(goals_router)
 router.include_router(roadmaps_router)
 router.include_router(weekly_tasks_router)

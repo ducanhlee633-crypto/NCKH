@@ -49,9 +49,9 @@
 .ai-widget-composer button { width: 40px; height: 40px; flex-shrink: 0; color: #fff; background: var(--blue); border: 0; border-radius: 50%; font-size: 18px; cursor: pointer; }
 .ai-widget-composer button:disabled { opacity: 0.45; cursor: default; }
 
-html[data-theme="dark"] .ai-widget-ai { background: #182232; }
-html[data-theme="dark"] .ai-widget-user { background: #263449; }
-html[data-theme="dark"] .ai-widget-composer input { background: #182232; }
+html[data-theme="dark"] .ai-widget-ai { background: var(--input); }
+html[data-theme="dark"] .ai-widget-user { background: var(--card-2); }
+html[data-theme="dark"] .ai-widget-composer input { background: var(--input); }
 
 @media (max-width: 650px) {
   .ai-widget-fab { width: 60px; height: 60px; }

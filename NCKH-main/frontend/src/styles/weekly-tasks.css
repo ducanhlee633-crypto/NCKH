@@ -83,8 +83,8 @@ html[data-theme="dark"] .weekly-card.priority-medium{background:linear-gradient(
 html[data-theme="dark"] .weekly-card.priority-low{background:#263449;border-color:var(--line);color:var(--ink)}
 html[data-theme="dark"] .weekly-column-done .weekly-card{background:linear-gradient(135deg,#17352a,#1f4636);border-color:#2a5a4f}
 html[data-theme="dark"] .weekly-card h3,html[data-theme="dark"] .weekly-desc,html[data-theme="dark"] .weekly-stepper{color:var(--ink)}
-html[data-theme="dark"] .weekly-subject,html[data-theme="dark"] .weekly-date,html[data-theme="dark"] .weekly-stepper button{background:#182232;border-color:#53647b;color:var(--ink)}
-html[data-theme="dark"] .weekly-empty,html[data-theme="dark"] .weekly-add{background:#263449;border-color:var(--line);color:var(--ink)}
+html[data-theme="dark"] .weekly-subject,html[data-theme="dark"] .weekly-date,html[data-theme="dark"] .weekly-stepper button{background:var(--card-2);border-color:var(--line);color:var(--ink)}
+html[data-theme="dark"] .weekly-empty,html[data-theme="dark"] .weekly-add{background:var(--card-2);border-color:var(--line);color:var(--ink)}
 
 @media(max-width:1020px){
   .weekly-board{grid-template-columns:minmax(0,1fr)}

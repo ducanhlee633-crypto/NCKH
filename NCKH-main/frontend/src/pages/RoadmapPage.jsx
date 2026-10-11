@@ -5,7 +5,7 @@ import useStoredState from '../data/useStoredState'
 import { SCHOOL_SUBJECTS, defaultSubjects } from '../data/subjects'
 import useGoals from '../data/useGoals'
 import { grades, loadSettings } from '../data/settings'
-import { buildAvailableDates, dateKey, MAX_LESSONS, safeMaterialUrl, validateRoadmapDraft } from '../data/roadmap'
+import { buildAvailableDates, dateKey, MAX_LESSONS, safeMaterialUrl, validateManualDraft, validateRoadmapDraft } from '../data/roadmap'
 import {
   createRoadmap,
   deleteRoadmap,
@@ -159,6 +159,10 @@ export default function RoadmapPage({ onNavigate, detailId }) {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
   const [aiResult, setAiResult] = useState(null)
+  // Tự tạo thủ công: nhập tay từng chặng (tối đa 5) + từng buổi (tối đa 120),
+  // mỗi buổi tự chọn ngày/giờ. Giữ cùng format Supabase qua roadmapToPayload.
+  const [manualStages, setManualStages] = useState([{ title: '', goal: '', checkpoint: '', materials: [] }])
+  const [manualLessons, setManualLessons] = useState([])
   // Mở/đóng từng chặng trong trang chi tiết (accordion kiểu course).
   const [openStages, setOpenStages] = useState({})
   const request = useRef(null)
@@ -250,6 +254,18 @@ export default function RoadmapPage({ onNavigate, detailId }) {
     setAiError('')
     setValidation('')
   }
+  function emptyManualLesson(date, time = '19:00', duration = 60) {
+    let end = '20:00'
+    const match = /^([01]\d|2[0-3]):([0-5]\d)$/.test(time) ? time.split(':').map(Number) : [19, 0]
+    const total = match[0] * 60 + match[1] + (Number.isInteger(Number(duration)) ? Number(duration) : 60)
+    if (total > 0 && total < 1440) {
+      end = String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0')
+    }
+    return { title: '', focus: '', stage: 0, date, start: TIME_FALLBACK(time), end, materialUrl: '', materialLabel: '' }
+  }
+  function TIME_FALLBACK(value) {
+    return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || '')) ? String(value) : '19:00'
+  }
   function openComposer(prefillGoalId) {
     if (!loggedIn) {
       setValidation('')
@@ -262,11 +278,95 @@ export default function RoadmapPage({ onNavigate, detailId }) {
     const end = new Date(today)
     end.setDate(end.getDate() + 27)
     const goal = goals.find(item => item.id === prefillGoalId)
+    const startKey = dateKey(today)
     setDraft({ ...emptyDraft, goalId: goal?.id || '', title: goal?.title || '', subject: subjects[0] || '',
-      grade: String(loadSettings().grade || ''), startDate: dateKey(today),
-      endDate: goal?.date >= dateKey(today) ? goal.date : dateKey(end), targetScore: goal?.targetScore ?? '' })
+      grade: String(loadSettings().grade || ''), startDate: startKey,
+      endDate: goal?.date >= startKey ? goal.date : dateKey(end), targetScore: goal?.targetScore ?? '' })
     setMode('ai')
+    setManualStages([{ title: '', goal: '', checkpoint: '', materials: [] }])
+    setManualLessons([emptyManualLesson(startKey), emptyManualLesson(startKey)])
     setValidation(''); setAiError(''); setAiResult(null); setShowModal(true)
+  }
+  // ---------- Helpers cho mode tự tạo thủ công ----------
+  function updateManualStage(index, patch) {
+    setManualStages(prev => prev.map((stage, i) => i === index ? { ...stage, ...patch } : stage))
+    setValidation('')
+  }
+  function addManualStage() {
+    setManualStages(prev => prev.length >= 5 ? prev : [...prev, { title: '', goal: '', checkpoint: '', materials: [] }])
+    setValidation('')
+  }
+  function removeManualStage(index) {
+    setManualStages(prev => {
+      if (prev.length <= 1) return prev
+      return prev.filter((_, i) => i !== index)
+    })
+    // Gán lại buổi thuộc chặng bị xóa về chặng 0, dồn index phía sau.
+    setManualLessons(prev => prev.map(lesson => {
+      const stage = Number(lesson.stage || 0)
+      if (stage === index) return { ...lesson, stage: 0 }
+      if (stage > index) return { ...lesson, stage: stage - 1 }
+      return lesson
+    }))
+    setValidation('')
+  }
+  function addStageMaterial(stageIndex) {
+    setManualStages(prev => prev.map((stage, i) => {
+      if (i !== stageIndex) return stage
+      const materials = Array.isArray(stage.materials) ? stage.materials : []
+      if (materials.length >= 3) return stage
+      return { ...stage, materials: [...materials, { label: '', url: '' }] }
+    }))
+  }
+  function updateStageMaterial(stageIndex, matIndex, patch) {
+    setManualStages(prev => prev.map((stage, i) => {
+      if (i !== stageIndex) return stage
+      const materials = (Array.isArray(stage.materials) ? stage.materials : []).map((item, j) => j === matIndex ? { ...item, ...patch } : item)
+      return { ...stage, materials }
+    }))
+    setValidation('')
+  }
+  function removeStageMaterial(stageIndex, matIndex) {
+    setManualStages(prev => prev.map((stage, i) => {
+      if (i !== stageIndex) return stage
+      return { ...stage, materials: (Array.isArray(stage.materials) ? stage.materials : []).filter((_, j) => j !== matIndex) }
+    }))
+  }
+  function updateManualLesson(index, patch) {
+    setManualLessons(prev => prev.map((lesson, i) => i === index ? { ...lesson, ...patch } : lesson))
+    setValidation('')
+  }
+  function addManualLesson() {
+    setManualLessons(prev => {
+      if (prev.length >= MAX_LESSONS) return prev
+      const last = prev[prev.length - 1]
+      let nextDate = dateKey(new Date())
+      try {
+        if (last?.date && /^\d{4}-\d{2}-\d{2}$/.test(last.date)) {
+          const d = new Date(last.date + 'T00:00:00')
+          d.setDate(d.getDate() + 1)
+          nextDate = dateKey(d)
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(draft.startDate)) {
+          nextDate = draft.startDate
+        }
+      } catch { /* giữ ngày hôm nay */ }
+      return [...prev, emptyManualLesson(nextDate, last?.start || draft.time || '19:00', draft.duration || 60)]
+    })
+    setValidation('')
+  }
+  function removeManualLesson(index) {
+    setManualLessons(prev => prev.filter((_, i) => i !== index))
+    setValidation('')
+  }
+  function duplicateManualLesson(index) {
+    setManualLessons(prev => {
+      if (prev.length >= MAX_LESSONS) return prev
+      const source = prev[index]
+      if (!source) return prev
+      const copy = { ...source, title: source.title ? source.title + ' (bản sao)' : '' }
+      return [...prev.slice(0, index + 1), copy, ...prev.slice(index + 1)]
+    })
+    setValidation('')
   }
   useEffect(() => () => request.current?.abort(), [])
   useEffect(() => {
@@ -314,9 +414,39 @@ export default function RoadmapPage({ onNavigate, detailId }) {
     event.preventDefault()
     if (aiLoading || saving) return
     if (!loggedIn) { setValidation('Hãy đăng nhập để lưu lộ trình học.'); return }
+    if (draft.goalId && !selectedGoal) { setValidation('Mục tiêu không còn tồn tại. Hãy chọn lại.'); return }
+    // Mode tự tạo thủ công: validate tay từng chặng + buổi, suy ngày bắt đầu/kết thúc
+    // từ buổi học rồi dùng chung roadmapToPayload để giữ format Supabase.
+    if (mode === 'manual') {
+      const manual = validateManualDraft({ draft, stages: manualStages, lessons: manualLessons })
+      if (manual.error) { setValidation(manual.error); return }
+      const draftForPayload = {
+        ...draft,
+        startDate: manual.startDate,
+        endDate: manual.endDate,
+        time: manual.time,
+        duration: manual.duration,
+        sessionsPerWeek: manual.sessionsPerWeek,
+        studyDays: manual.studyDays,
+      }
+      const payload = roadmapToPayload({ draft: draftForPayload, stages: manual.stages, lessons: manual.lessons, aiGenerated: false })
+      setSaving(true)
+      setValidation('')
+      try {
+        const created = await createRoadmap(payload)
+        setServerRows(rows => [...(Array.isArray(rows) ? rows : []), created])
+        closeComposer()
+        setAiResult(null)
+        if (created?.id) onNavigate(`roadmap/${created.id}`)
+      } catch (failure) {
+        setValidation(failure?.friendlyMessage || 'Không lưu được lộ trình lên server. Vui lòng thử lại.')
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
     const checked = validateRoadmapDraft(draft)
     if (checked.error) { setValidation(checked.error); return }
-    if (draft.goalId && !selectedGoal) { setValidation('Mục tiêu không còn tồn tại. Hãy chọn lại.'); return }
     if (mode === 'ai' && !aiReady) { generateWithAi(); return }
     const { slots: dates, endLabel } = checked
     const useAi = mode === 'ai' && aiReady
@@ -538,6 +668,10 @@ export default function RoadmapPage({ onNavigate, detailId }) {
         aiLoading={aiLoading} aiError={aiError} aiReady={aiReady} aiPlan={aiPlan} aiResult={aiResult}
         validation={validation} syncError={syncError} saving={saving}
         create={create} closeComposer={closeComposer} generateWithAi={generateWithAi} cancelGeneration={cancelGeneration}
+        manualStages={manualStages} manualLessons={manualLessons}
+        updateManualStage={updateManualStage} addManualStage={addManualStage} removeManualStage={removeManualStage}
+        addStageMaterial={addStageMaterial} updateStageMaterial={updateStageMaterial} removeStageMaterial={removeStageMaterial}
+        updateManualLesson={updateManualLesson} addManualLesson={addManualLesson} removeManualLesson={removeManualLesson} duplicateManualLesson={duplicateManualLesson}
       />}
       {deleting && <Modal title="Xóa lộ trình" onClose={() => setDeleting(null)}><p>Xóa “{deleting.title}” và toàn bộ chặng + buổi học trên server?</p>{syncError && <p role="alert">{syncError}</p>}<div className="composer-actions"><button className="ghost-button" onClick={() => setDeleting(null)}>Hủy</button><button className="primary-button" disabled={saving} onClick={removeRoadmap}>{saving ? 'Đang xóa…' : 'Xóa lộ trình'}</button></div></Modal>}
     </>
@@ -607,7 +741,12 @@ export default function RoadmapPage({ onNavigate, detailId }) {
   </>
 }
 
-function ComposerModal({ draft, update, mode, setMode, goals, loadingGoals, goalSyncError, selectedGoal, subjects, slots, previewCount, aiLoading, aiError, aiReady, aiPlan, aiResult, validation, syncError, saving, create, closeComposer, generateWithAi, cancelGeneration }) {
+function ComposerModal({ draft, update, mode, setMode, goals, loadingGoals, goalSyncError, selectedGoal, subjects, slots, previewCount, aiLoading, aiError, aiReady, aiPlan, aiResult, validation, syncError, saving, create, closeComposer, generateWithAi, cancelGeneration, manualStages = [], manualLessons = [], updateManualStage, addManualStage, removeManualStage, addStageMaterial, updateStageMaterial, removeStageMaterial, updateManualLesson, addManualLesson, removeManualLesson, duplicateManualLesson }) {
+  const isManual = mode === 'manual'
+  const manualDates = (Array.isArray(manualLessons) ? manualLessons : []).map(item => String(item?.date || '')).filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort()
+  const manualSummary = manualDates.length
+    ? `${manualStages.length} chặng · ${manualLessons.length} buổi · ${manualDates[0].split('-').reverse().join('/')} – ${manualDates[manualDates.length - 1].split('-').reverse().join('/')}`
+    : `${manualStages.length} chặng · ${manualLessons.length} buổi`
   return (
     <Modal title="Thiết lập lộ trình" onClose={closeComposer}>
       <form onSubmit={create}>
@@ -632,21 +771,74 @@ function ComposerModal({ draft, update, mode, setMode, goals, loadingGoals, goal
         <label>Nội dung cần học và kết quả mong muốn<textarea required rows={4} maxLength={2000} value={draft.context} onChange={event => update('context', event.target.value)} placeholder="Ví dụ: Ôn phương trình bậc hai và hệ thức Viète để thi học kỳ. Đã biết giải phương trình bậc nhất." /></label>
         <label>Phần còn yếu<textarea rows={2} maxLength={600} value={draft.weakTopics} onChange={event => update('weakTopics', event.target.value)} placeholder="Ví dụ: Biến đổi biểu thức, nhận diện dạng bài" /></label>
         <label>Cách học và tài liệu đang dùng<input maxLength={300} value={draft.learningStyle} onChange={event => update('learningStyle', event.target.value)} placeholder="Ví dụ: Ví dụ trực quan rồi tự luyện; SGK Kết nối tri thức" /></label>
+        {!isManual && (
+          <div className="composer-times">
+            <label>Ngày bắt đầu<input required type="date" value={draft.startDate} onChange={event => update('startDate', event.target.value)} /></label>
+            <label>Ngày kết thúc<input required type="date" min={draft.startDate} value={draft.endDate} onChange={event => update('endDate', event.target.value)} /></label>
+          </div>
+        )}
+        {selectedGoal?.date && !isManual && draft.endDate > selectedGoal.date && <p role="status">Lộ trình kết thúc sau hạn mục tiêu. Hãy điều chỉnh nếu bạn cần hoàn thành trước hạn.</p>}
         <div className="composer-times">
-          <label>Ngày bắt đầu<input required type="date" value={draft.startDate} onChange={event => update('startDate', event.target.value)} /></label>
-          <label>Ngày kết thúc<input required type="date" min={draft.startDate} value={draft.endDate} onChange={event => update('endDate', event.target.value)} /></label>
+          <label>{isManual ? 'Giờ mặc định cho buổi mới' : 'Giờ bắt đầu'}<input required type="time" value={draft.time} onChange={event => update('time', event.target.value)} /></label>
+          <label>{isManual ? 'Phút mặc định mỗi buổi mới' : 'Phút mỗi buổi'}<input required type="number" min="5" max="240" step="1" value={draft.duration} onChange={event => update('duration', event.target.value)} /></label>
         </div>
-        {selectedGoal?.date && draft.endDate > selectedGoal.date && <p role="status">Lộ trình kết thúc sau hạn mục tiêu. Hãy điều chỉnh nếu bạn cần hoàn thành trước hạn.</p>}
-        <div className="composer-times">
-          <label>Giờ bắt đầu<input required type="time" value={draft.time} onChange={event => update('time', event.target.value)} /></label>
-          <label>Phút mỗi buổi<input required type="number" min="5" max="240" step="1" value={draft.duration} onChange={event => update('duration', event.target.value)} /></label>
-        </div>
-        <fieldset className="roadmap-days"><legend>Những ngày có thể học</legend>{WEEKDAYS.map(([day, label]) => <label key={day}><input type="checkbox" checked={draft.studyDays.includes(day)} onChange={() => update('studyDays', draft.studyDays.includes(day) ? draft.studyDays.filter(item => item !== day) : [...draft.studyDays, day])} />{label}</label>)}</fieldset>
-        <label>Số buổi mỗi tuần<input required type="number" min="1" max={Math.max(1, draft.studyDays.length)} step="1" value={draft.sessionsPerWeek} onChange={event => update('sessionsPerWeek', event.target.value)} /></label>
+        {!isManual && (
+          <>
+            <fieldset className="roadmap-days"><legend>Những ngày có thể học</legend>{WEEKDAYS.map(([day, label]) => <label key={day}><input type="checkbox" checked={draft.studyDays.includes(day)} onChange={() => update('studyDays', draft.studyDays.includes(day) ? draft.studyDays.filter(item => item !== day) : [...draft.studyDays, day])} />{label}</label>)}</fieldset>
+            <label>Số buổi mỗi tuần<input required type="number" min="1" max={Math.max(1, draft.studyDays.length)} step="1" value={draft.sessionsPerWeek} onChange={event => update('sessionsPerWeek', event.target.value)} /></label>
+          </>
+        )}
         <label>Lưu ý và giới hạn thời gian<textarea rows={2} maxLength={2000} value={draft.notes} onChange={event => update('notes', event.target.value)} placeholder="Ví dụ: Dễ mất tập trung, cần nghỉ ngắn trong buổi học" /></label>
-        <p role="status">{previewCount > MAX_LESSONS ? `Vượt giới hạn ${MAX_LESSONS} buổi — hãy rút ngắn thời hạn.` : previewCount ? `${previewCount} buổi · ${Math.round(previewCount * Number(draft.duration) / 60 * 10) / 10} giờ học · rải đều vào các ngày đã chọn.` : 'Chọn ngày học và số buổi phù hợp để xem lịch dự kiến.'}</p>
-        <label>Cách tạo<select value={mode} onChange={event => { cancelGeneration(); setMode(event.target.value); setAiError('') }}><option value="ai">AI cá nhân hóa theo hồ sơ học tập</option><option value="basic">Khung cơ bản — tự điều chỉnh nội dung</option></select></label>
-        {mode === 'ai' ? <div className="ai-roadmap-box" aria-busy={aiLoading}>
+        {!isManual && (
+          <p role="status">{previewCount > MAX_LESSONS ? `Vượt giới hạn ${MAX_LESSONS} buổi — hãy rút ngắn thời hạn.` : previewCount ? `${previewCount} buổi · ${Math.round(previewCount * Number(draft.duration) / 60 * 10) / 10} giờ học · rải đều vào các ngày đã chọn.` : 'Chọn ngày học và số buổi phù hợp để xem lịch dự kiến.'}</p>
+        )}
+        <label>Cách tạo<select value={mode} onChange={event => { cancelGeneration(); setMode(event.target.value); setAiError('') }}><option value="ai">AI cá nhân hóa theo hồ sơ học tập</option><option value="basic">Khung cơ bản — tự điều chỉnh nội dung</option><option value="manual">Tự tạo thủ công — nhập từng chặng + buổi</option></select></label>
+        {isManual ? (
+          <div className="manual-box">
+            <p role="status">{manualSummary} · Ngày bắt đầu/kết thúc tự suy từ buổi học, giữ nguyên format Supabase như bản AI.</p>
+            <div className="manual-head"><b>Chặng ({manualStages.length}/5)</b><button type="button" className="ghost-button" disabled={manualStages.length >= 5} onClick={addManualStage}>＋ Thêm chặng</button></div>
+            {manualStages.map((stage, stageIndex) => (
+              <details key={stageIndex} className="manual-stage" open={stageIndex === 0}>
+                <summary>Chặng {stageIndex + 1}: {String(stage.title || '').trim() || 'Chưa đặt tên'} ({manualLessons.filter(item => Number(item.stage) === stageIndex).length} buổi)</summary>
+                <label>Tên chặng<input required={isManual} maxLength={160} value={stage.title} onChange={event => updateManualStage(stageIndex, { title: event.target.value })} placeholder={`Ví dụ: Chặng ${stageIndex + 1} — Nền tảng`} /></label>
+                <label>Mục tiêu chặng<textarea rows={2} maxLength={800} value={stage.goal} onChange={event => updateManualStage(stageIndex, { goal: event.target.value })} placeholder="Ví dụ: Nắm chắc lý thuyết trọng tâm" /></label>
+                <label>Checkpoint kiểm tra<input maxLength={800} value={stage.checkpoint} onChange={event => updateManualStage(stageIndex, { checkpoint: event.target.value })} placeholder="Ví dụ: Làm đúng 4/5 bài cơ bản" /></label>
+                <div className="manual-materials">
+                  <div className="manual-head sub"><span>Tài liệu chặng ({(Array.isArray(stage.materials) ? stage.materials : []).length}/3)</span><button type="button" className="goal-action" disabled={(Array.isArray(stage.materials) ? stage.materials : []).length >= 3} onClick={() => addStageMaterial(stageIndex)}>＋ Thêm tài liệu</button></div>
+                  {(Array.isArray(stage.materials) ? stage.materials : []).map((mat, matIndex) => (
+                    <div key={matIndex} className="composer-times manual-material-row">
+                      <label>Link http(s)<input type="url" inputMode="url" value={mat.url} onChange={event => updateStageMaterial(stageIndex, matIndex, { url: event.target.value })} placeholder="https://…" /></label>
+                      <label>Nhãn hiển thị<input maxLength={200} value={mat.label} onChange={event => updateStageMaterial(stageIndex, matIndex, { label: event.target.value })} placeholder="Tên tài liệu" /></label>
+                      <button type="button" className="ghost-button" onClick={() => removeStageMaterial(stageIndex, matIndex)} aria-label={`Xóa tài liệu ${matIndex + 1} chặng ${stageIndex + 1}`}>✕</button>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" className="ghost-button" disabled={manualStages.length <= 1} onClick={() => removeManualStage(stageIndex)}>Xóa chặng {stageIndex + 1}</button>
+              </details>
+            ))}
+            <div className="manual-head"><b>Buổi học ({manualLessons.length}/{MAX_LESSONS})</b><button type="button" className="ghost-button" disabled={manualLessons.length >= MAX_LESSONS} onClick={addManualLesson}>＋ Thêm buổi</button></div>
+            {manualLessons.length === 0 && <p role="status">Chưa có buổi nào. Bấm “Thêm buổi” để tự nhập từng buổi học.</p>}
+            {manualLessons.map((lesson, lessonIndex) => (
+              <div key={lessonIndex} className="manual-lesson">
+                <div className="manual-head sub"><b>Buổi {lessonIndex + 1}</b><span className="manual-actions"><button type="button" className="goal-action" disabled={manualLessons.length >= MAX_LESSONS} onClick={() => duplicateManualLesson(lessonIndex)}>Nhân bản</button><button type="button" className="ghost-button" onClick={() => removeManualLesson(lessonIndex)}>Xóa</button></span></div>
+                <label>Tên buổi học<input required={isManual} maxLength={160} value={lesson.title} onChange={event => updateManualLesson(lessonIndex, { title: event.target.value })} placeholder={`Ví dụ: Buổi ${lessonIndex + 1} — Ôn lý thuyết trọng tâm`} /></label>
+                <label>Mục tiêu buổi<input maxLength={600} value={lesson.focus} onChange={event => updateManualLesson(lessonIndex, { focus: event.target.value })} placeholder="Ví dụ: Tự giải 3 bài mẫu" /></label>
+                <div className="composer-times">
+                  <label>Thuộc chặng<select value={lesson.stage} onChange={event => updateManualLesson(lessonIndex, { stage: Number(event.target.value) })}>{manualStages.map((stage, stageIndex) => <option key={stageIndex} value={stageIndex}>Chặng {stageIndex + 1}{stage.title ? ` — ${String(stage.title).slice(0, 30)}` : ''}</option>)}</select></label>
+                  <label>Ngày học<input required={isManual} type="date" value={lesson.date} onChange={event => updateManualLesson(lessonIndex, { date: event.target.value })} /></label>
+                </div>
+                <div className="composer-times">
+                  <label>Bắt đầu<input required={isManual} type="time" value={lesson.start} onChange={event => updateManualLesson(lessonIndex, { start: event.target.value })} /></label>
+                  <label>Kết thúc<input required={isManual} type="time" value={lesson.end} onChange={event => updateManualLesson(lessonIndex, { end: event.target.value })} /></label>
+                </div>
+                <div className="composer-times">
+                  <label>Link tài liệu buổi<input type="url" inputMode="url" value={lesson.materialUrl} onChange={event => updateManualLesson(lessonIndex, { materialUrl: event.target.value })} placeholder="https://… (không bắt buộc)" /></label>
+                  <label>Nhãn link<input maxLength={200} value={lesson.materialLabel} onChange={event => updateManualLesson(lessonIndex, { materialLabel: event.target.value })} placeholder="Tên hiển thị" /></label>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : mode === 'ai' ? <div className="ai-roadmap-box" aria-busy={aiLoading}>
           <div className="ai-roadmap-head"><b>AI soạn lộ trình</b><span role="status">{aiLoading ? 'Đang tìm tài liệu và soạn từng chặng…' : aiReady ? `Đã soạn ${previewCount} buổi` : 'Chưa soạn'}</span></div>
           <p>AI dựa trên trình độ, điểm yếu, mục tiêu và thời lượng để chia kiến thức, ôn tập, luyện tập và kiểm tra. Lộ trình dài có thể mất vài phút.</p>
           <button type="button" className="ghost-button" disabled={aiLoading || loadingGoals || !previewCount || previewCount > MAX_LESSONS} onClick={generateWithAi}>{aiLoading ? 'Đang soạn…' : aiReady ? 'Soạn lại bằng AI' : 'Soạn và xem trước'}</button>
@@ -667,7 +859,7 @@ function ComposerModal({ draft, update, mode, setMode, goals, loadingGoals, goal
           </div>}
         </div> : <p>Khung cơ bản chia việc học theo mẫu, chưa đánh giá trình độ và chưa có tài liệu cá nhân hóa.</p>}
         {(validation || syncError) && <p role="alert">{validation || syncError}</p>}
-        <div className="composer-actions"><button type="button" className="ghost-button" onClick={closeComposer}>Hủy</button><button className="primary-button" disabled={aiLoading || loadingGoals || saving}>{saving ? 'Đang lưu…' : mode === 'basic' ? 'Lưu khung cơ bản' : aiReady ? 'Lưu lộ trình vào lịch' : 'Soạn lộ trình bằng AI'}</button></div>
+        <div className="composer-actions"><button type="button" className="ghost-button" onClick={closeComposer}>Hủy</button><button className="primary-button" disabled={aiLoading || loadingGoals || saving}>{saving ? 'Đang lưu…' : mode === 'manual' ? `Lưu lộ trình tự tạo (${manualLessons.length} buổi)` : mode === 'basic' ? 'Lưu khung cơ bản' : aiReady ? 'Lưu lộ trình vào lịch' : 'Soạn lộ trình bằng AI'}</button></div>
       </form>
     </Modal>
   )

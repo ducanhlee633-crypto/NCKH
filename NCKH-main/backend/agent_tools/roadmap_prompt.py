@@ -17,14 +17,23 @@ Mỗi buổi có một đầu ra kiểm chứng được, khối lượng vừa 
 ngắn nếu buổi dài). Không lặp nguyên tiêu đề + việc cần làm để đủ số buổi.
 Checkpoint phải có cách kiểm tra, thời lượng, tiêu chí đạt, cách ôn lại nếu chưa đạt;
 không vượt thời lượng buổi học. Buổi cuối tổng kết hoặc đánh giá mục tiêu.
-Tài liệu chỉ lấy URL nguyên vẹn trong allowed_materials; chọn đúng lớp và chủ đề.
+Tài liệu đã được tìm sẵn trên web trong allowed_materials (mỗi mục có label, url, snippet mô tả).
+BẮT BUỘC: nếu allowed_materials có dữ liệu thì MỌI buổi học đều phải có material_url
+là 1 URL nguyên vẹn trong danh sách đó, không được để trống, không bịa link ngoài
+danh sách, không dồn cả chặng vào 1 link. Chỉ khi allowed_materials rỗng mới được
+để materials: [], material_url: "" và hướng dẫn ôn SGK/tài liệu người học có.
+CẤM ghi focus chung chung kiểu "ôn tập", "luyện thêm", "học kỹ lý thuyết".
+Mỗi focus phải nêu rõ 3 ý: mở tài liệu nào (ghi tên theo label) -> đọc/xem phần
+liên quan tới chủ đề buổi này (suy từ tiêu đề + snippet) -> làm việc cụ thể và đầu
+ra kiểm chứng được trong duration phút. Buổi lý thuyết ưu tiên link bài giảng,
+buổi luyện ưu tiên link bài tập có lời giải, buổi cuối chặng ưu tiên link đề kiểm
+tra; mỗi URL phù hợp cố gắng dùng ít nhất 1 lần.
 Chỉ có tiêu đề và mô tả tìm kiếm, chưa đọc toàn văn: KHÔNG bịa trang, số bài,
 số ví dụ, đề thi, đáp án hay khẳng định đã kiểm chứng nội dung. Hướng dẫn tìm phần
-liên quan và tự luyện nếu chưa rõ. Không dùng link chỉ vì nó có trong danh sách.
+liên quan trong link và tự luyện nếu chưa rõ. Không dùng link sai lớp, sai chủ đề
+chỉ vì nó có trong danh sách.
 KHÔNG viết câu kiểu "hãy tìm ... trên mạng" hay "lên Google tìm ...": link thật
-đã cho trong allowed_materials thì gắn vào buổi học, chưa có thì để trống.
-Không có tài liệu phù hợp thì để materials: [], material_url: "" và hướng dẫn
-ôn SGK/tài liệu người học có. Không tự soạn toàn bài học hoặc làm hộ bài thi.
+đã cho thì gắn thẳng vào buổi học. Không tự soạn toàn bài học hoặc làm hộ bài thi.
 Mỗi chặng dùng tối đa 3 tài liệu. Mỗi buổi có title (<=80 ký tự), focus (<=280 ký tự)
 và material_url. Title, goal, checkpoint không được rỗng; viết tiếng Việt ngắn gọn.
 Schema thông thường:

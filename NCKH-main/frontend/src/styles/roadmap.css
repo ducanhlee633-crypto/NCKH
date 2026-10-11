@@ -38,7 +38,22 @@ details.ai-stage-preview { display: block; }
 .ai-roadmap-head { flex-wrap: wrap; }
 .stage-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
 .roadmap-bottom > span { display: block; color: var(--muted); font-size: 14px; line-height: 1.5; }
-html[data-theme="dark"] :is(.ai-roadmap-box, .ai-stage-preview, .stage-materials) { background: var(--card); color: var(--ink); border-color: var(--line); }
+.manual-box { margin: 16px 0; padding: 14px; background: linear-gradient(145deg,#fff,hsl(var(--accent-hue, 216) 100% 97%)); border: 2px dashed hsl(var(--accent-hue, 216) 80% 85%); border-radius: 16px; display: grid; gap: 12px; }
+.manual-box p { margin: 0; font-size: 13px; color: #5b6a84; line-height: 1.5; }
+.manual-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.manual-head.sub { margin-top: 4px; }
+.manual-head b, .manual-head span { font-size: 13px; }
+.manual-stage { padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 10px; }
+.manual-stage summary { cursor: pointer; font-weight: 800; }
+.manual-stage label { display: grid; gap: 6px; font-size: 13px; font-weight: 700; }
+.manual-materials { display: grid; gap: 8px; padding: 10px; background: #f8fbff; border: 1px dashed var(--line); border-radius: 12px; }
+.manual-material-row { align-items: end; }
+.manual-material-row .ghost-button { flex: 0 0 auto; }
+.manual-lesson { padding: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 10px; }
+.manual-lesson label { display: grid; gap: 6px; font-size: 13px; font-weight: 700; }
+.manual-actions { display: flex; gap: 8px; }
+.app-modal:has(.manual-box) { width: min(760px, calc(100% - 32px)); }
+html[data-theme="dark"] :is(.ai-roadmap-box, .ai-stage-preview, .stage-materials, .manual-box, .manual-stage, .manual-lesson, .manual-materials) { background: var(--card); color: var(--ink); border-color: var(--line); }
 html[data-theme="dark"] .stage-goal { color: var(--ink) !important; }
 html[data-theme="dark"] .stage-checkpoint { color: #a2ebca !important; background: #183d35; }
 

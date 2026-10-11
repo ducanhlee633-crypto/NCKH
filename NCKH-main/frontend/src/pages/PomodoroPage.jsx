@@ -2,12 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { CardHeader, SectionCard } from '../components/PageComponents'
 import {
   POMODORO_SUBJECTS,
+  createFocusTask,
   createPomodoroSession,
+  deleteFocusTask,
   deletePomodoroSession,
+  fetchFocusTasks,
   fetchPomodoroSessions,
   fetchPomodoroSummary,
   getSession,
   onSessionChange,
+  patchFocusTask,
 } from '../backendApi'
 import {
   readFocusTimer,
@@ -54,6 +58,32 @@ function loadStats() {
   return { date: today(), sessions: 0, minutes: 0 }
 }
 
+// Việc cần tập trung (ô nhập task): local fallback khi chưa đăng nhập.
+// Shape: [{id, title, subject, status, position}]. id local: `local-<ts>-<rand>`.
+function loadLocalFocusTasks() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('nhip-hoc-focus-tasks'))
+    if (!Array.isArray(saved)) return []
+    return saved
+      .filter((item) => item && typeof item.title === 'string' && item.title.trim())
+      .map((item, index) => ({
+        id: String(item.id || `local-${index}`),
+        title: String(item.title).slice(0, 160),
+        subject: POMODORO_SUBJECTS.includes(item.subject) ? item.subject : '',
+        status: item.status === 'doing' || item.status === 'done' ? item.status : 'todo',
+        position: Number.isInteger(item.position) ? Math.max(0, Math.min(10000, item.position)) : index,
+      }))
+  } catch { return [] }
+}
+
+function loadActiveTask() {
+  try {
+    const id = localStorage.getItem('nhip-hoc-focus-active-task') || ''
+    const title = localStorage.getItem('nhip-hoc-focus-task-title') || ''
+    return { id, title: title.slice(0, 160) }
+  } catch { return { id: '', title: '' } }
+}
+
 export default function PomodoroPage() {
   const [customMinutes, setCustomMinutes] = useState(loadMinutes)
   const durations = customMinutes.map((m) => m * 60)
@@ -87,6 +117,55 @@ export default function PomodoroPage() {
   const [serverToday, setServerToday] = useState(null)
   const [serverSessions, setServerSessions] = useState([])
   const [syncError, setSyncError] = useState('')
+  // Việc cần tập trung (ô nhập task + danh sách): đăng nhập -> server
+  // (bảng focus_tasks), chưa đăng nhập -> localStorage. activeTaskId là việc
+  // đang bấm giờ; taskTitle tự do cho phép gõ nhanh không cần thêm vào list.
+  const [focusTasks, setFocusTasks] = useState(() => (getSession() ? [] : loadLocalFocusTasks()))
+  const [localTasks, setLocalTasks] = useState(loadLocalFocusTasks)
+  const [activeTaskId, setActiveTaskId] = useState(() => loadActiveTask().id)
+  const [taskTitle, setTaskTitle] = useState(() => loadActiveTask().title)
+  const [taskDraft, setTaskDraft] = useState('')
+  const [taskSubject, setTaskSubject] = useState('')
+  const [taskError, setTaskError] = useState('')
+  const [taskSaving, setTaskSaving] = useState(false)
+  // Form thêm task ẩn/hiện kiểu Pomofocus + menu ⋮ của từng dòng.
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [openMenuId, setOpenMenuId] = useState('')
+  const tasks = loggedIn ? focusTasks : localTasks
+  const activeTask = tasks.find((item) => String(item.id) === String(activeTaskId)) || null
+  // Tên việc gửi kèm phiên: ưu tiên task đang chọn, rơi về ô gõ tự do.
+  const effectiveTaskTitle = (activeTask?.title || taskTitle || '').trim().slice(0, 160)
+  const effectiveSubject = activeTask?.subject || subject
+  const activeTaskRef = useRef({ id: activeTaskId, title: effectiveTaskTitle, subject: effectiveSubject })
+  useEffect(() => {
+    activeTaskRef.current = { id: activeTaskId, title: effectiveTaskTitle, subject: effectiveSubject }
+  }, [activeTaskId, effectiveTaskTitle, effectiveSubject])
+
+  async function refreshFocusTasks() {
+    if (!getSession()) {
+      setFocusTasks([])
+      return
+    }
+    try {
+      const rows = await fetchFocusTasks()
+      setFocusTasks(Array.isArray(rows) ? rows : [])
+      setTaskError('')
+    } catch {
+      // Rớt mạng: giữ danh sách cũ, không chặn timer.
+    }
+  }
+
+  // Persist task local + việc đang làm để reload giữa chừng không mất.
+  useEffect(() => {
+    if (loggedIn) return
+    try { localStorage.setItem('nhip-hoc-focus-tasks', JSON.stringify(localTasks)) } catch { /* Keep in-memory tasks. */ }
+  }, [localTasks, loggedIn])
+  useEffect(() => {
+    try {
+      localStorage.setItem('nhip-hoc-focus-active-task', activeTaskId || '')
+      localStorage.setItem('nhip-hoc-focus-task-title', activeTask ? '' : taskTitle.slice(0, 160))
+    } catch { /* Keep in-memory selection. */ }
+  }, [activeTaskId, taskTitle, activeTask])
 
   async function refreshServer() {
     if (!getSession()) {
@@ -115,9 +194,12 @@ export default function PomodoroPage() {
 
   useEffect(() => {
     refreshServer()
+    refreshFocusTasks()
     return onSessionChange((session) => {
       setLoggedIn(!!session)
       refreshServer()
+      refreshFocusTasks()
+      if (!session) setFocusTasks([])
     })
   }, [])
 
@@ -157,9 +239,12 @@ export default function PomodoroPage() {
         })
         // Đã đăng nhập: tự ghi phiên đã hoàn thành lên server (giữ local nếu rớt mạng).
         if (getSession()) {
+          const active = activeTaskRef.current
           createPomodoroSession({
             focus_minutes: focusLength,
-            subject: subjectRef.current,
+            subject: active.subject || subjectRef.current,
+            ...(active.title ? { task_title: active.title } : {}),
+            ...(active.id && !String(active.id).startsWith('local-') ? { focus_task_id: active.id } : {}),
             started_at: startedAt.toISOString(),
             ended_at: endedAt.toISOString(),
           })
@@ -199,7 +284,10 @@ export default function PomodoroPage() {
   // refresh lại mỗi khi user quay về #pomodoro để số liệu mới nhất.
   useEffect(() => {
     const onHashChange = () => {
-      if (window.location.hash === '#pomodoro') refreshServer()
+      if (window.location.hash === '#pomodoro') {
+        refreshServer()
+        refreshFocusTasks()
+      }
     }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
@@ -323,6 +411,146 @@ export default function PomodoroPage() {
     }
   }
 
+  function applyTasks(next) {
+    if (loggedIn) setFocusTasks(next)
+    else setLocalTasks(next)
+  }
+
+  async function addFocusTask(event) {
+    event?.preventDefault()
+    const title = taskDraft.trim().slice(0, 160)
+    if (!title) {
+      setTaskError('Hãy nhập tên việc cần tập trung.')
+      return
+    }
+    setTaskError('')
+    setTaskSaving(true)
+    try {
+      if (loggedIn) {
+        const created = await createFocusTask({ title, subject: taskSubject || null, status: 'todo', position: tasks.length })
+        setFocusTasks((rows) => [...(rows || []), created])
+        setActiveTaskId(String(created.id))
+        setTaskTitle('')
+        if (created.subject) setSubject(created.subject)
+      } else {
+        const created = {
+          id: `local-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+          title,
+          subject: POMODORO_SUBJECTS.includes(taskSubject) ? taskSubject : '',
+          status: 'todo',
+          position: localTasks.length,
+        }
+        setLocalTasks((rows) => [...rows, created])
+        setActiveTaskId(created.id)
+        setTaskTitle('')
+        if (created.subject) setSubject(created.subject)
+      }
+      setTaskDraft('')
+      setTaskSubject('')
+      setShowAddForm(false)
+    } catch (failure) {
+      setTaskError(failure.friendlyMessage || 'Không lưu được việc. Vui lòng thử lại.')
+    } finally {
+      setTaskSaving(false)
+    }
+  }
+
+  async function clearDoneTasks() {
+    const done = tasks.filter((item) => item.status === 'done')
+    if (done.length === 0) return
+    const snapshot = tasks
+    applyTasks(tasks.filter((item) => item.status !== 'done'))
+    if (done.some((item) => String(item.id) === String(activeTaskId))) {
+      setActiveTaskId('')
+      setTaskTitle('')
+    }
+    if (!loggedIn) return
+    try {
+      await Promise.all(done.filter((item) => !String(item.id).startsWith('local-')).map((item) => deleteFocusTask(item.id)))
+      refreshFocusTasks()
+    } catch {
+      applyTasks(snapshot)
+    }
+  }
+
+  // Số phiên hôm nay đã gắn vào 1 task (khớp focus_task_id, rơi về tên task).
+  function sessionsOfTask(item) {
+    if (!loggedIn || !Array.isArray(serverSessions)) return 0
+    return serverSessions.filter((row) => {
+      if (row.focus_task_id && String(row.focus_task_id) === String(item.id)) return true
+      const snapshot = String(row.task_title || '').trim().toLowerCase()
+      return snapshot && snapshot === String(item.title || '').trim().toLowerCase()
+    }).length
+  }
+
+  async function selectFocusTask(task) {
+    const id = String(task.id)
+    const isActive = String(activeTaskId) === id
+    setActiveTaskId(isActive ? '' : id)
+    if (!isActive) {
+      setTaskTitle('')
+      if (task.subject) setSubject(task.subject)
+    }
+    // Đánh dấu doing cho việc đang làm, các việc doing khác về todo.
+    const next = tasks.map((item) => {
+      if (String(item.id) === id) return { ...item, status: isActive ? 'todo' : 'doing' }
+      if (item.status === 'doing') return { ...item, status: 'todo' }
+      return item
+    })
+    applyTasks(next)
+    if (!loggedIn) return
+    try {
+      await patchFocusTask(task.id, { status: isActive ? 'todo' : 'doing' })
+      const demote = tasks.filter((item) => String(item.id) !== id && item.status === 'doing')
+      await Promise.all(demote.map((item) => patchFocusTask(item.id, { status: 'todo' }).catch(() => null)))
+      refreshFocusTasks()
+    } catch {
+      // Giữ trạng thái local, không chặn timer.
+    }
+  }
+
+  async function toggleFocusDone(task) {
+    const nextStatus = task.status === 'done' ? 'todo' : 'done'
+    const next = tasks.map((item) => (String(item.id) === String(task.id) ? { ...item, status: nextStatus } : item))
+    applyTasks(next)
+    if (String(activeTaskId) === String(task.id) && nextStatus === 'done') {
+      setActiveTaskId('')
+      setTaskTitle('')
+    }
+    if (!loggedIn) return
+    try {
+      await patchFocusTask(task.id, { status: nextStatus })
+      refreshFocusTasks()
+    } catch {
+      // Giữ trạng thái local.
+    }
+  }
+
+  async function removeFocusTask(task) {
+    const snapshot = tasks
+    applyTasks(tasks.filter((item) => String(item.id) !== String(task.id)))
+    if (String(activeTaskId) === String(task.id)) {
+      setActiveTaskId('')
+      setTaskTitle('')
+    }
+    if (!loggedIn) return
+    if (String(task.id).startsWith('local-')) return
+    try {
+      await deleteFocusTask(task.id)
+      refreshFocusTasks()
+    } catch (failure) {
+      applyTasks(snapshot)
+      setTaskError(failure.friendlyMessage || 'Không xóa được việc.')
+    }
+  }
+
+  const sortedTasks = [...tasks].sort((a, b) => {
+    const doneWeight = (item) => (item.status === 'done' ? 1 : 0)
+    if (doneWeight(a) !== doneWeight(b)) return doneWeight(a) - doneWeight(b)
+    return (a.position ?? 0) - (b.position ?? 0)
+  })
+  const openTasks = tasks.filter((item) => item.status !== 'done').length
+
   const localSessions = stats.date === today() ? stats.sessions : 0
   const localMinutes = stats.date === today() ? (stats.minutes ?? localSessions * customMinutes[0]) : 0
   const sessions = loggedIn && serverToday ? Number(serverToday.total_sessions ?? 0) : localSessions
@@ -348,6 +576,94 @@ export default function PomodoroPage() {
           <div className="focus-ring" style={{ background: `conic-gradient(var(--blue) 0 ${progress}%, var(--line) 0 100%)` }}><div><strong role="timer" aria-label="Thời gian còn lại">{time}</strong><span>{statusText}</span></div></div>
           <div className="cycle-row"><span>Chu kỳ phiên hôm nay</span><b>{cycle} / 4</b></div><div className="cycle-dots">{[0, 1, 2, 3].map((index) => <i key={index} className={index < cycle ? 'completed' : ''} />)}</div>
           <div className="focus-actions"><button className="primary-button" onClick={toggleTimer}>{running ? 'Ⅱ Tạm dừng' : '▶ Bắt đầu'}</button><button className="icon-button" onClick={() => reset()} aria-label="Đặt lại thời gian">↻</button></div>
+          <section className="pomo-tasks" aria-label="Danh sách việc cần tập trung">
+            <div className="pomo-tasks-head">
+              <h2>Việc cần tập trung{openTasks ? ` · còn ${openTasks}` : ''}</h2>
+              {tasks.some((item) => item.status === 'done') && (
+                <button type="button" className="pomo-tasks-clear" onClick={clearDoneTasks}>Dọn việc xong</button>
+              )}
+            </div>
+            {sortedTasks.length === 0 && !showAddForm && (
+              <p className="duration-hint">Chưa có việc nào — thêm task để mỗi phiên pomodoro bám đúng 1 việc.</p>
+            )}
+            <div className="pomo-task-list">
+              {sortedTasks.map((item) => {
+                const isActive = String(activeTaskId) === String(item.id)
+                const isDone = item.status === 'done'
+                const doneCount = sessionsOfTask(item)
+                const menuOpen = String(openMenuId) === String(item.id)
+                return (
+                  <div className={`pomo-task-row${isActive ? ' active' : ''}${isDone ? ' done' : ''}`} key={item.id}>
+                    <button
+                      type="button"
+                      className="pomo-task-check"
+                      aria-pressed={isDone}
+                      aria-label={isDone ? `Đánh dấu chưa xong: ${item.title}` : `Đánh dấu xong: ${item.title}`}
+                      onClick={() => toggleFocusDone(item)}
+                    >{isDone ? '✓' : ''}</button>
+                    <button
+                      type="button"
+                      className="pomo-task-title"
+                      title={item.subject ? `${item.title} · ${item.subject}` : item.title}
+                      onClick={() => !isDone && selectFocusTask(item)}
+                    >
+                      <b>{item.title}</b>
+                      {item.subject ? <small>{item.subject}</small> : null}
+                    </button>
+                    {doneCount > 0 && <span className="pomo-task-count" title={`${doneCount} phiên hôm nay cho việc này`}>{doneCount} phiên</span>}
+                    <button
+                      type="button"
+                      className="pomo-task-menu-btn"
+                      aria-expanded={menuOpen}
+                      aria-label={`Tùy chọn cho việc ${item.title}`}
+                      onClick={() => setOpenMenuId(menuOpen ? '' : String(item.id))}
+                    >⋮</button>
+                    {menuOpen && (
+                      <div className="pomo-task-menu" role="menu">
+                        {!isDone && (
+                          <button type="button" role="menuitem" onClick={() => { setOpenMenuId(''); selectFocusTask(item) }}>
+                            {isActive ? 'Bỏ ghim khỏi đồng hồ' : 'Ghim lên đồng hồ'}
+                          </button>
+                        )}
+                        <button type="button" role="menuitem" onClick={() => { setOpenMenuId(''); toggleFocusDone(item) }}>
+                          {isDone ? 'Đánh dấu chưa xong' : 'Đánh dấu đã xong'}
+                        </button>
+                        <button type="button" role="menuitem" className="danger" onClick={() => { setOpenMenuId(''); removeFocusTask(item) }}>
+                          Xóa việc
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {showAddForm ? (
+              <form className="pomo-task-form" onSubmit={addFocusTask}>
+                <input
+                  autoFocus
+                  value={taskDraft}
+                  onChange={(event) => setTaskDraft(event.target.value)}
+                  maxLength={160}
+                  placeholder="Nhập task… Ví dụ: Ôn 30 từ vựng Unit 5"
+                  aria-label="Tên việc cần tập trung"
+                />
+                <div className="pomo-task-form-row">
+                  <select value={taskSubject} onChange={(event) => setTaskSubject(event.target.value)} aria-label="Môn của việc mới">
+                    <option value="">— Môn —</option>
+                    {POMODORO_SUBJECTS.map((name) => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                  <button type="button" className="ghost-button" onClick={() => { setShowAddForm(false); setTaskError('') }}>Hủy</button>
+                  <button type="submit" className="primary-button" disabled={taskSaving}>{taskSaving ? 'Đang thêm…' : 'Thêm việc'}</button>
+                </div>
+              </form>
+            ) : (
+              <button type="button" className="pomo-task-add" onClick={() => { setShowAddForm(true); setTaskError('') }}>
+                <span aria-hidden="true">⊕</span> Thêm việc
+              </button>
+            )}
+            {taskError && <p role="alert">{taskError}</p>}
+            {!loggedIn && <p className="duration-note">Chưa đăng nhập — việc lưu trên trình duyệt này. Đăng nhập để đồng bộ lên server.</p>}
+          </section>
           <label className="duration-hint" style={{ display: 'block', marginTop: 12 }}>
             <span>Môn học của phiên này</span>
             <div className="duration-input subject-input" style={{ marginTop: 6 }}>
@@ -380,7 +696,7 @@ export default function PomodoroPage() {
                     : `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}–${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`
                   return (
                     <div className="task-item" key={row.id}>
-                      <div><b>{row.focus_minutes} phút{row.subject ? ` · ${row.subject}` : ''}</b><br /><small>{time}</small></div>
+                      <div><b>{row.task_title || `${row.focus_minutes} phút`}{row.task_title ? ` · ${row.focus_minutes} phút` : ''}{row.subject ? ` · ${row.subject}` : ''}</b><br /><small>{time}</small></div>
                       <button type="button" className="delete-button" aria-label={`Xóa phiên ${row.focus_minutes} phút`} onClick={() => removeSession(row.id)}>Xóa</button>
                     </div>
                   )
