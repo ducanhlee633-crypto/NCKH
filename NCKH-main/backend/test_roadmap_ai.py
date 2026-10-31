@@ -49,10 +49,8 @@ class TestRoadmapAi(unittest.TestCase):
         app.dependency_overrides[get_current_supabase_user] = lambda: SimpleNamespace(id="user-1", email="a@b.c")
         self.client = TestClient(app)
         settings = SimpleNamespace(
-            openrouter_api_key="test-key",
-            openrouter_model="test-model",
-            openrouter_site_url=None,
-            openrouter_app_name=None,
+            gemini_api_key="test-key",
+            gemini_model="test-model",
         )
         self._settings = patch("routers.roadmap_ai.get_settings", return_value=settings)
         self._settings.start()

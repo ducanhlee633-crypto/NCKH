@@ -1,7 +1,7 @@
 """System prompt dùng chung cho trợ lý học tập Nhịp Học (AI chat).
 
 Tách ra file riêng để:
-- routers/ai.py chỉ lo gọi model OpenRouter,
+- routers/ai.py chỉ lo gọi model Gemini,
 - agent_tools/short_memory.py (và các tool sau này) có thể tái sử dụng
   cùng một prompt mà không duplicate string.
 

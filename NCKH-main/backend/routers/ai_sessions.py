@@ -1,5 +1,5 @@
 # Router lưu trữ lịch sử chat AI (tiền đề RAG sau này).
-# Thuần CRUD, KHÔNG gọi model AI (logic gọi OpenRouter nằm ở routers/ai.py).
+# Thuần CRUD, KHÔNG gọi model AI (logic gọi Gemini nằm ở routers/ai.py).
 #
 # - POST   /ai/sessions            tạo session mới (title do frontend gửi)
 # - GET    /ai/sessions            liệt kê session của mình (mới nhất trước)

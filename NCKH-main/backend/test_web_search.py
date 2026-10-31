@@ -149,10 +149,8 @@ class TestChatSearchFlow(unittest.TestCase):
         self.settings = patch(
             "routers.ai.get_settings",
             return_value=SimpleNamespace(
-                openrouter_api_key="test-key",
-                openrouter_model="test-model",
-                openrouter_site_url=None,
-                openrouter_app_name=None,
+                gemini_api_key="test-key",
+                gemini_model="test-model",
             ),
         ).start()
         self.addCleanup(patch.stopall)

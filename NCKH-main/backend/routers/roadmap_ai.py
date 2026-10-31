@@ -18,7 +18,8 @@ from auth import SupabaseUser, get_current_supabase_user
 from config import get_settings
 
 router = APIRouter(prefix="/ai", tags=["ai-roadmap"])
-DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+DEFAULT_MODEL = "gemini-3.1-flash-lite"
+GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 
 class RoadmapMaterial(BaseModel):
@@ -197,9 +198,6 @@ def _request_json(client, model, prompt, tokens, validate, deadline):
             completion = client.chat.completions.create(
                 model=model, messages=messages, temperature=0.35, max_tokens=tokens,
                 stream=False, timeout=min(60.0, remaining),
-                # Như chat: model reasoning ăn chung budget max_tokens.
-                # Ép effort=low để dành chỗ cho JSON lộ trình.
-                extra_body={"reasoning": {"effort": "low", "exclude": True}},
             )
         except Exception as error:
             code = getattr(error, "status_code", None)
@@ -223,7 +221,7 @@ def _request_json(client, model, prompt, tokens, validate, deadline):
 @router.post("/roadmap", response_model=RoadmapResponse)
 async def generate_roadmap(payload: RoadmapRequest, current: SupabaseUser = Depends(get_current_supabase_user)):
     settings = get_settings()
-    if not (settings.openrouter_api_key or "").strip():
+    if not (settings.gemini_api_key or "").strip():
         raise HTTPException(503, "Dịch vụ AI chưa được cấu hình.")
     deadline = monotonic() + 180
     # Search 3 query song song trong threadpool (giữ nguyên helper sync để test mock được).
@@ -244,14 +242,9 @@ async def generate_roadmap(payload: RoadmapRequest, current: SupabaseUser = Depe
         from openai import OpenAI
     except ImportError as error:
         raise HTTPException(503, "Backend thiếu thư viện openai.") from error
-    headers = {}
-    if settings.openrouter_site_url:
-        headers["HTTP-Referer"] = settings.openrouter_site_url
-    if settings.openrouter_app_name:
-        headers["X-Title"] = settings.openrouter_app_name
-    model = (settings.openrouter_model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
-    client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=settings.openrouter_api_key,
-                    timeout=60.0, max_retries=0, default_headers=headers)
+    model = (settings.gemini_model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    client = OpenAI(base_url=GEMINI_OPENAI_BASE_URL, api_key=settings.gemini_api_key,
+                    timeout=60.0, max_retries=0)
     try:
         if total <= 16:
             stages = await run_blocking(

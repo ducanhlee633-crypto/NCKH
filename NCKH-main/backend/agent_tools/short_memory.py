@@ -5,7 +5,7 @@ Khi agent gọi, tool này:
 - Lấy messages của session (bảng ai_messages, sort created_at ASC),
 - Giữ nguyên N tin gần nhất (mặc định 5),
 - Các tin còn lại (cũ hơn) gộp thành một tóm tắt ngắn dạng rule-based
-  (KHÔNG gọi LLM, không tốn quota OpenRouter).
+  (KHÔNG gọi LLM, không tốn quota Gemini).
 
 Nguồn dữ liệu: Supabase (qua supabase_client.get_supabase_admin),
 khớp schema với routers/ai_sessions.py. Hàm độc lập, chưa đấu nối
@@ -40,7 +40,7 @@ MESSAGE_COLUMNS = "id,session_id,user_id,role,content,created_at,updated_at"
 
 _VALID_ROLES = ("user", "assistant")
 
-# Mô tả tool cho agent/function-calling sau này (OpenAI/OpenRouter format).
+# Mô tả tool cho agent/function-calling sau này (OpenAI/Gemini format).
 TOOL_SPEC: dict[str, Any] = {
     "type": "function",
     "function": {

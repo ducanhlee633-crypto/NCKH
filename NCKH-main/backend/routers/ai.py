@@ -18,8 +18,9 @@ Trí nhớ dài hạn (bảng ai_memories, user tự quản trong Settings):
   (tags hint -> suy từ câu hỏi -> mới nhất), dùng index (user_id, tag).
 - Lỗi DB memory luôn fallback chat thường, không vỡ chat.
 
-Dùng OpenAI SDK trỏ về OpenRouter (base_url=https://openrouter.ai/api/v1).
-Key lấy từ backend/.env (OPENROUTER_API_KEY), không bao giờ lộ ra frontend.
+Dùng OpenAI SDK trỏ về Gemini OpenAI-compatible endpoint
+(base_url=https://generativelanguage.googleapis.com/v1beta/openai/).
+Key lấy từ backend/.env (GEMINI_API_KEY), không bao giờ lộ ra frontend.
 Yêu cầu đăng nhập Supabase như các router khác.
 
 Search tài liệu (agent_tools.web_search.search_documents):
@@ -66,7 +67,8 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 # để code cũ dùng `from routers.ai import SYSTEM_PROMPT` không bị vỡ).
 __all__ = ["SYSTEM_PROMPT", "router"]
 
-DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+DEFAULT_MODEL = "gemini-3.1-flash-lite"
+GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 MAX_MESSAGES = 20
 MAX_CHARS_TOTAL = 12000
 # Tối đa 1 lượt gọi search/lượt chat (chống lặp tool vô hạn).
@@ -145,20 +147,14 @@ def _normalize_messages(payload: ChatRequest) -> list[dict]:
     return trimmed
 
 
-def _request_completion(client, model, messages, extra_headers, tools=None):
-    """Gọi OpenRouter một lượt. tools=None nghĩa là chat thường (không function-calling)."""
+def _request_completion(client, model, messages, tools=None):
+    """Gọi Gemini một lượt. tools=None nghĩa là chat thường (không function-calling)."""
     kwargs: dict = {
         "model": model,
         "messages": messages,
         "temperature": 0.7,
-        # Nemotron-3-super là reasoning model: reasoning tokens tính chung vào
-        # max_tokens. Để 1000 như trước thì reasoning ăn hết budget -> content rỗng
-        # + finish_reason=length -> 502. Tăng lên 3000 + ép reasoning effort=low.
         "max_tokens": 3000,
         "stream": False,
-        "extra_headers": extra_headers or None,
-        # effort low (~20% budget cho reasoning) + exclude để không trả reasoning về.
-        "extra_body": {"reasoning": {"effort": "low", "exclude": True}},
     }
     if tools is not None:
         kwargs["tools"] = tools
@@ -168,7 +164,7 @@ def _request_completion(client, model, messages, extra_headers, tools=None):
     except Exception as error:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"OpenRouter lỗi: {error}",
+            detail=f"Gemini lỗi: {error}",
         ) from error
 
 
@@ -228,17 +224,17 @@ async def chat_with_ai(
     payload: ChatRequest,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> ChatResponse:
-    """Chat 2 chiều với model OpenRouter (JSON, không stream)."""
+    """Chat 2 chiều với model Gemini (JSON, không stream)."""
     import asyncio
 
     settings = get_settings()
-    api_key = (settings.openrouter_api_key or "").strip()
+    api_key = (settings.gemini_api_key or "").strip()
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Dịch vụ AI chưa được cấu hình (thiếu OPENROUTER_API_KEY).",
+            detail="Dịch vụ AI chưa được cấu hình (thiếu GEMINI_API_KEY).",
         )
-    model = (settings.openrouter_model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    model = (settings.gemini_model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
     user_messages = _normalize_messages(payload)
     last_user_text = next((m["content"] for m in reversed(user_messages) if m["role"] == "user"), "")
     # Giọng AI (DB) + trí nhớ dài hạn (DB): 2 query độc lập -> chạy song song.
@@ -259,14 +255,8 @@ async def chat_with_ai(
             detail="Backend thiếu thư viện openai. Hãy chạy pip install openai.",
         ) from error
 
-    extra_headers: dict[str, str] = {}
-    if settings.openrouter_site_url:
-        extra_headers["HTTP-Referer"] = settings.openrouter_site_url
-    if settings.openrouter_app_name:
-        extra_headers["X-Title"] = settings.openrouter_app_name
-
     client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
+        base_url=GEMINI_OPENAI_BASE_URL,
         api_key=api_key,
         timeout=60.0,
     )
@@ -284,7 +274,7 @@ async def chat_with_ai(
                     "content": SEARCH_CONTEXT_INSTRUCTION + "\n" + format_results_for_llm(found, query),
                 },
             ]
-            completion = await run_blocking(_request_completion, client, model, with_context, extra_headers)
+            completion = await run_blocking(_request_completion, client, model, with_context)
             return ChatResponse(
                 reply=_extract_reply(completion),
                 model=model,
@@ -296,12 +286,12 @@ async def chat_with_ai(
 
     # Nhánh 2 — agentic: để model tự quyết định gọi tool search_documents.
     try:
-        first = await run_blocking(_request_completion, client, model, base_messages, extra_headers, [SEARCH_TOOL_SPEC])
+        first = await run_blocking(_request_completion, client, model, base_messages, [SEARCH_TOOL_SPEC])
     except HTTPException as error:
         # Model/endpoint không hỗ trợ tools → chat thường, giữ nguyên hành vi cũ.
         if "tool" not in str(error.detail).lower():
             raise
-        plain = await run_blocking(_request_completion, client, model, base_messages, extra_headers)
+        plain = await run_blocking(_request_completion, client, model, base_messages)
         return ChatResponse(
             reply=_extract_reply(plain), model=model, ai_tone=ai_tone,
             memory_used=len(memory_rows), memory_tags=memory_tags,
@@ -354,7 +344,7 @@ async def chat_with_ai(
         {"role": "tool", "tool_call_id": getattr(search_call, "id", "call_1"), "content": tool_content},
     ]
     # Chỉ 1 lượt search/lượt chat (MAX_SEARCH_TURNS): lượt 2 không kèm tools nữa.
-    second = await run_blocking(_request_completion, client, model, second_messages, extra_headers)
+    second = await run_blocking(_request_completion, client, model, second_messages)
     return ChatResponse(
         reply=_extract_reply(second), model=model, ai_tone=ai_tone,
         memory_used=len(memory_rows), memory_tags=memory_tags,
