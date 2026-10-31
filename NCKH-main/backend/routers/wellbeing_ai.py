@@ -20,7 +20,7 @@ from supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/wellbeing-ai", tags=["wellbeing-ai"])
 
-DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+DEFAULT_MODEL = "nvidia/nemotron-3.5-lightning:free"
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 SYSTEM_PROMPT = (
@@ -246,8 +246,9 @@ async def analyze_wellbeing(
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.7,
-            max_tokens=1500,
+            max_tokens=2500,
             stream=False,
+            extra_body={"reasoning": {"effort": "low"}},
         )
     except Exception as error:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"OpenRouter lỗi: {error}") from error

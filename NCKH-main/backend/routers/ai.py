@@ -67,7 +67,7 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 # để code cũ dùng `from routers.ai import SYSTEM_PROMPT` không bị vỡ).
 __all__ = ["SYSTEM_PROMPT", "router"]
 
-DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+DEFAULT_MODEL = "nvidia/nemotron-3.5-lightning:free"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 MAX_MESSAGES = 20
 MAX_CHARS_TOTAL = 12000
@@ -155,6 +155,10 @@ def _request_completion(client, model, messages, tools=None):
         "temperature": 0.7,
         "max_tokens": 3000,
         "stream": False,
+        # Model Nemotron suy luận trước khi trả lời (tốn <= ~1200 token cho 1 câu
+        # ngắn), giành lấy budget của content. effort=low giữ chất đáp án mà
+        # không lấn content. OpenRouter hiểu param `reasoning` này cho mọi model.
+        "extra_body": {"reasoning": {"effort": "low"}},
     }
     if tools is not None:
         kwargs["tools"] = tools

@@ -18,7 +18,7 @@ from auth import SupabaseUser, get_current_supabase_user
 from config import get_settings
 
 router = APIRouter(prefix="/ai", tags=["ai-roadmap"])
-DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+DEFAULT_MODEL = "nvidia/nemotron-3.5-lightning:free"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
@@ -198,6 +198,7 @@ def _request_json(client, model, prompt, tokens, validate, deadline):
             completion = client.chat.completions.create(
                 model=model, messages=messages, temperature=0.35, max_tokens=tokens,
                 stream=False, timeout=min(60.0, remaining),
+                extra_body={"reasoning": {"effort": "low"}},
             )
         except Exception as error:
             code = getattr(error, "status_code", None)

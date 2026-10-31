@@ -28,7 +28,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("OPENROUTER_API_KEY", "OPENROUTER_KEY"),
     )
     openrouter_model: str = Field(
-        default="nvidia/nemotron-3-ultra-550b-a55b:free",
+        default="nvidia/nemotron-3.5-lightning:free",
         validation_alias="OPENROUTER_MODEL",
     )
     # Web Push (VAPID). Public key lộ cho frontend subscribe, private key chỉ ở backend.
