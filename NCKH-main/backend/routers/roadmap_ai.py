@@ -18,8 +18,8 @@ from auth import SupabaseUser, get_current_supabase_user
 from config import get_settings
 
 router = APIRouter(prefix="/ai", tags=["ai-roadmap"])
-DEFAULT_MODEL = "gemini-3.1-flash-lite"
-GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 class RoadmapMaterial(BaseModel):
@@ -221,7 +221,7 @@ def _request_json(client, model, prompt, tokens, validate, deadline):
 @router.post("/roadmap", response_model=RoadmapResponse)
 async def generate_roadmap(payload: RoadmapRequest, current: SupabaseUser = Depends(get_current_supabase_user)):
     settings = get_settings()
-    if not (settings.gemini_api_key or "").strip():
+    if not (settings.openrouter_api_key or "").strip():
         raise HTTPException(503, "Dịch vụ AI chưa được cấu hình.")
     deadline = monotonic() + 180
     # Search 3 query song song trong threadpool (giữ nguyên helper sync để test mock được).
@@ -242,8 +242,8 @@ async def generate_roadmap(payload: RoadmapRequest, current: SupabaseUser = Depe
         from openai import OpenAI
     except ImportError as error:
         raise HTTPException(503, "Backend thiếu thư viện openai.") from error
-    model = (settings.gemini_model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
-    client = OpenAI(base_url=GEMINI_OPENAI_BASE_URL, api_key=settings.gemini_api_key,
+    model = (settings.openrouter_model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    client = OpenAI(base_url=OPENROUTER_BASE_URL, api_key=settings.openrouter_api_key,
                     timeout=60.0, max_retries=0)
     try:
         if total <= 16:

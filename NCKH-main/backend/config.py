@@ -21,13 +21,15 @@ class Settings(BaseSettings):
     # Ví dụ: FRONTEND_URL=https://nhip-hoc.vercel.app (local: http://localhost:5173).
     # Phải trùng Site URL / Redirect URLs trong Supabase Dashboard > Authentication > URL Configuration.
     frontend_url: str = Field(default="", validation_alias="FRONTEND_URL")
-    # Gemini (Google AI Studio) — dùng endpoint tương thích OpenAI
-    # (https://generativelanguage.googleapis.com/v1beta/openai/).
+    # OpenRouter — endpoint tương thích OpenAI (https://openrouter.ai/api/v1).
     # Key chỉ nằm ở backend, không bao giờ lộ ra frontend.
-    gemini_api_key: str | None = Field(default=None, validation_alias="GEMINI_API_KEY")
-    gemini_model: str = Field(
-        default="gemini-3.1-flash-lite",
-        validation_alias="GEMINI_MODEL",
+    openrouter_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("OPENROUTER_API_KEY", "OPENROUTER_KEY"),
+    )
+    openrouter_model: str = Field(
+        default="nvidia/nemotron-3-ultra-550b-a55b:free",
+        validation_alias="OPENROUTER_MODEL",
     )
     # Web Push (VAPID). Public key lộ cho frontend subscribe, private key chỉ ở backend.
     vapid_public_key: str | None = Field(default=None, validation_alias="VAPID_PUBLIC_KEY")

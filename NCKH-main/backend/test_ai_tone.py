@@ -1,7 +1,7 @@
 """Test chất giọng AI: 4 system prompt văn phong + đấu nối POST /api/ai/chat.
 
 Chạy:  python3 -m pytest test_ai_tone.py -q   (thư mục backend/)
-OpenAI (Gemini compat)/supabase được mock hoàn toàn, không gọi mạng thật.
+OpenAI chuẩn OpenRouter/supabase được mock hoàn toàn, không gọi mạng thật.
 """
 import unittest
 from types import SimpleNamespace
@@ -95,8 +95,8 @@ class TestChatEndpointTone(unittest.TestCase):
         self.settings = patch(
             "routers.ai.get_settings",
             return_value=SimpleNamespace(
-                gemini_api_key="test-key",
-                gemini_model="test-model",
+                openrouter_api_key="test-key",
+                openrouter_model="test-model",
             ),
         ).start()
         self.addCleanup(patch.stopall)

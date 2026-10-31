@@ -8,7 +8,7 @@ Cách dùng trong agent/router:
     from agent_tools.web_search import looks_like_search_request, extract_search_query
 
 Quy ước giống short_memory.py: TOOL_SPEC theo format function-calling
-của OpenAI/Gemini, hàm pure dễ test, lỗi mạng gom về SearchUnavailableError.
+của OpenAI-compatible, hàm pure dễ test, lỗi mạng gom về SearchUnavailableError.
 """
 
 import re
@@ -41,7 +41,7 @@ _VIETNAMESE_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Mô tả tool cho agent/function-calling (OpenAI/Gemini format,
+# Mô tả tool cho agent/function-calling (OpenAI-compatible format,
 # giống short_memory.TOOL_SPEC).
 TOOL_SPEC: dict[str, Any] = {
     "type": "function",

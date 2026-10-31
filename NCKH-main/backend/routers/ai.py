@@ -18,9 +18,9 @@ Trí nhớ dài hạn (bảng ai_memories, user tự quản trong Settings):
   (tags hint -> suy từ câu hỏi -> mới nhất), dùng index (user_id, tag).
 - Lỗi DB memory luôn fallback chat thường, không vỡ chat.
 
-Dùng OpenAI SDK trỏ về Gemini OpenAI-compatible endpoint
+Dùng OpenAI SDK trỏ về OpenRouter endpoint (https://openrouter.ai/api/v1)
 (base_url=https://generativelanguage.googleapis.com/v1beta/openai/).
-Key lấy từ backend/.env (GEMINI_API_KEY), không bao giờ lộ ra frontend.
+Key lấy từ backend/.env (OPENROUTER_API_KEY), không bao giờ lộ ra frontend.
 Yêu cầu đăng nhập Supabase như các router khác.
 
 Search tài liệu (agent_tools.web_search.search_documents):
@@ -67,8 +67,8 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 # để code cũ dùng `from routers.ai import SYSTEM_PROMPT` không bị vỡ).
 __all__ = ["SYSTEM_PROMPT", "router"]
 
-DEFAULT_MODEL = "gemini-3.1-flash-lite"
-GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 MAX_MESSAGES = 20
 MAX_CHARS_TOTAL = 12000
 # Tối đa 1 lượt gọi search/lượt chat (chống lặp tool vô hạn).
@@ -148,7 +148,7 @@ def _normalize_messages(payload: ChatRequest) -> list[dict]:
 
 
 def _request_completion(client, model, messages, tools=None):
-    """Gọi Gemini một lượt. tools=None nghĩa là chat thường (không function-calling)."""
+    """Gọi model qua OpenRouter một lượt. tools=None nghĩa là chat thường (không function-calling)."""
     kwargs: dict = {
         "model": model,
         "messages": messages,
@@ -164,7 +164,7 @@ def _request_completion(client, model, messages, tools=None):
     except Exception as error:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Gemini lỗi: {error}",
+            detail=f"OpenRouter lỗi: {error}",
         ) from error
 
 
@@ -224,17 +224,17 @@ async def chat_with_ai(
     payload: ChatRequest,
     current: SupabaseUser = Depends(get_current_supabase_user),
 ) -> ChatResponse:
-    """Chat 2 chiều với model Gemini (JSON, không stream)."""
+    """Chat 2 chiều với model OpenRouter (JSON, không stream)."""
     import asyncio
 
     settings = get_settings()
-    api_key = (settings.gemini_api_key or "").strip()
+    api_key = (settings.openrouter_api_key or "").strip()
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Dịch vụ AI chưa được cấu hình (thiếu GEMINI_API_KEY).",
+            detail="Dịch vụ AI chưa được cấu hình (thiếu OPENROUTER_API_KEY).",
         )
-    model = (settings.gemini_model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    model = (settings.openrouter_model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
     user_messages = _normalize_messages(payload)
     last_user_text = next((m["content"] for m in reversed(user_messages) if m["role"] == "user"), "")
     # Giọng AI (DB) + trí nhớ dài hạn (DB): 2 query độc lập -> chạy song song.
@@ -256,7 +256,7 @@ async def chat_with_ai(
         ) from error
 
     client = OpenAI(
-        base_url=GEMINI_OPENAI_BASE_URL,
+        base_url=OPENROUTER_BASE_URL,
         api_key=api_key,
         timeout=60.0,
     )

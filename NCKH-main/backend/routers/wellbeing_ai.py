@@ -3,7 +3,7 @@
 # Luồng: gom dữ liệu giống hệt GET /api/wellbeing/stress
 # (deadlines, weekly_tasks, pomodoro_sessions, daily_tasks)
 # rồi gọi services/stress.compute_stress (bản 4 tín hiệu)
-# để lấy score/level/parts, sau đó gọi Gemini để sinh lời gợi ý
+# để lấy score/level/parts, sau đó gọi OpenRouter để sinh lời gợi ý
 # cách cải thiện mà người dùng tự làm được. KHÔNG chẩn đoán bệnh.
 from datetime import date as va_date
 from datetime import datetime, timedelta, timezone
@@ -20,7 +20,7 @@ from supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/wellbeing-ai", tags=["wellbeing-ai"])
 
-DEFAULT_MODEL = "gemini-3.1-flash-lite"
+DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 SYSTEM_PROMPT = (
@@ -202,13 +202,13 @@ async def analyze_wellbeing(
 
     # --- Gọi AI phân tích từ dữ liệu thật ---
     settings = get_settings()
-    api_key = (settings.gemini_api_key or "").strip()
+    api_key = (settings.openrouter_api_key or "").strip()
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Dịch vụ AI chưa được cấu hình (thiếu GEMINI_API_KEY).",
+            detail="Dịch vụ AI chưa được cấu hình (thiếu OPENROUTER_API_KEY).",
         )
-    model = (settings.gemini_model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    model = (settings.openrouter_model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
 
     user_prompt = (
         "[Dữ liệu nhịp học]\n"
@@ -235,7 +235,7 @@ async def analyze_wellbeing(
             detail="Backend thiếu thư viện openai. Hãy chạy pip install openai.",
         ) from error
 
-    client = OpenAI(base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    client = OpenAI(base_url="https://openrouter.ai/api/v1",
                     api_key=api_key, timeout=60.0)
     try:
         completion = await run_blocking(
@@ -250,7 +250,7 @@ async def analyze_wellbeing(
             stream=False,
         )
     except Exception as error:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Gemini lỗi: {error}") from error
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"OpenRouter lỗi: {error}") from error
     finally:
         try:
             client.close()
